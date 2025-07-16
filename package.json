@@ -5,7 +5,7 @@
   "main": "agent/trading_agent.js",
   "scripts": {
     "start": "node agent/trading_agent.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo \"No tests specified yet\"",
     "ci-install": "npm ci"
   },
   "dependencies": {
