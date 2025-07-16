@@ -1,0 +1,53 @@
+2025-07-10 03:04:40,844 INFO --- Starting New Training Pipeline (Bias Corrected) ---
+2025-07-10 03:04:40,861 INFO Loaded data from 2010-07-07 00:00:00 to 2025-07-07 00:00:00. Shape: (3773, 8)
+2025-07-10 03:04:40,861 INFO Step 1: Generating features for train and test sets (no look-ahead bias)...
+2025-07-10 03:04:40,861 INFO --- [DYNAMIC PARAMS] Attempting to calculate 147 indicators ---
+2025-07-10 03:05:02,905 INFO --- [DYNAMIC PARAMS] Finished Calculation ---
+2025-07-10 03:05:02,905 INFO Successfully attempted: 141 indicators.
+2025-07-10 03:05:02,905 WARNING Failed or skipped: 6 indicators.
+2025-07-10 03:05:03,392 INFO 
+Feature generation finished. Added 324 new features. Total columns: 332
+2025-07-10 03:05:03,392 INFO Checking for critical indicators in the final feature set:
+2025-07-10 03:05:03,392 INFO   [V] rsi - FOUND
+2025-07-10 03:05:03,392 INFO   [V] macd - FOUND
+2025-07-10 03:05:03,392 WARNING   [X] stoch - NOT FOUND
+2025-07-10 03:05:03,392 INFO   [V] adx - FOUND
+2025-07-10 03:05:03,392 WARNING   [X] bbands - NOT FOUND
+2025-07-10 03:05:03,392 WARNING   [X] atr - NOT FOUND
+2025-07-10 03:05:03,392 INFO   [V] obv - FOUND
+2025-07-10 03:05:03,425 INFO --- [DYNAMIC PARAMS] Attempting to calculate 147 indicators ---
+2025-07-10 03:05:29,458 INFO --- [DYNAMIC PARAMS] Finished Calculation ---
+2025-07-10 03:05:29,458 INFO Successfully attempted: 141 indicators.
+2025-07-10 03:05:29,458 WARNING Failed or skipped: 6 indicators.
+2025-07-10 03:05:29,974 INFO 
+Feature generation finished. Added 325 new features. Total columns: 333
+2025-07-10 03:05:29,974 INFO Checking for critical indicators in the final feature set:
+2025-07-10 03:05:29,974 INFO   [V] rsi - FOUND
+2025-07-10 03:05:29,974 INFO   [V] macd - FOUND
+2025-07-10 03:05:29,974 WARNING   [X] stoch - NOT FOUND
+2025-07-10 03:05:29,974 INFO   [V] adx - FOUND
+2025-07-10 03:05:29,974 WARNING   [X] bbands - NOT FOUND
+2025-07-10 03:05:29,974 WARNING   [X] atr - NOT FOUND
+2025-07-10 03:05:29,974 INFO   [V] obv - FOUND
+2025-07-10 03:05:30,042 INFO Data split into Train: 3018 rows, Test: 755 rows.
+2025-07-10 03:05:30,042 INFO Step 2: Selecting top 40 features...
+2025-07-10 03:05:34,425 INFO Selected 40 features.
+2025-07-10 03:05:34,425 INFO Step 3: Running Optuna hyperparameter optimization...
+2025-07-10 03:06:59,707 INFO Best params found: {'n_estimators': 246, 'max_depth': 9, 'learning_rate': 0.016939750454764847, 'subsample': 0.9999999584290233, 'colsample_bytree': 0.9579124606639782}
+2025-07-10 03:06:59,707 INFO Step 4: Training final model and evaluating on test set...
+2025-07-10 03:07:00,367 INFO --- Performance Report on Test Set ---
+2025-07-10 03:07:00,367 INFO Test Accuracy: 0.6861
+2025-07-10 03:07:00,390 INFO 
+              precision    recall  f1-score   support
+
+           0       0.74      0.75      0.74       460
+           1       0.60      0.58      0.59       295
+
+    accuracy                           0.69       755
+   macro avg       0.67      0.67      0.67       755
+weighted avg       0.68      0.69      0.69       755
+
+2025-07-10 03:07:00,390 INFO Step 5: Saving model, scaler, configuration, and summary...
+2025-07-10 03:07:00,419 INFO Training summary saved to C:\Users\משה\פרויקט קופילוט למידת מכונה\models\training_summary.json
+2025-07-10 03:07:00,420 INFO Artifacts saved: C:\Users\משה\פרויקט קופילוט למידת מכונה\models\champion_model.pkl, C:\Users\משה\פרויקט קופילוט למידת מכונה\models\champion_scaler.pkl, C:\Users\משה\פרויקט קופילוט למידת מכונה\models\champion_model_config.json
+2025-07-10 03:07:00,420 INFO --- Training pipeline finished successfully! ---

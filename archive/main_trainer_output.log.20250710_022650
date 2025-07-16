@@ -1,0 +1,8 @@
+2025-07-10 02:26:33,024 INFO --- Starting New Training Pipeline (Bias Corrected) ---
+2025-07-10 02:26:33,050 INFO Loaded data from 2010-07-07 00:00:00 to 2025-07-07 00:00:00. Shape: (3773, 8)
+2025-07-10 02:26:33,051 INFO Step 1: Generating features for train and test sets (no look-ahead bias)...
+2025-07-10 02:26:33,052 INFO --- Applying all available pandas_ta indicators using 'AllStrategy' ---
+2025-07-10 02:26:43,389 ERROR Error applying pandas_ta strategy: 'Series' object has no attribute 'append'
+2025-07-10 02:26:43,524 INFO Removed 9 constant or empty columns.
+2025-07-10 02:26:43,524 INFO Feature generation finished. Added 163 new features. Total columns: 170
+2025-07-10 02:26:43,555 INFO --- Applying all available pandas_ta indicators using 'AllStrategy' ---

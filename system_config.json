@@ -1,0 +1,91 @@
+{
+  "training_params": {
+    "n_trials": 10,
+    "test_size_split": 20,
+    "cv_splits": 3,
+    "years_of_data": 15,
+    "optuna_target_metric": "total_return",
+    "n_startup_trials": 2
+  },
+  "contract": {
+    "symbol": "SPY",
+    "secType": "STK",
+    "exchange": "SMART",
+    "currency": "USD",
+    "primaryExch": "ARCA"
+  },
+  "backtest_params": {
+    "initial_balance": 100000,
+    "commission": 0.001,
+    "slippage": 0.0005,
+    "min_history_days": 100
+  },
+  "api_settings": {
+    "host": "0.0.0.0",
+    "port": 5000
+  },
+  "ibkr_settings": {
+    "host": "127.0.0.1",
+    "port": 4001,
+    "clientId": 101,
+    "history_window": "90 D"
+  },
+  "system_paths": {
+    "champion_model": "models/champion_model.pkl",
+    "champion_scaler": "models/champion_scaler.pkl",
+    "champion_config": "models/champion_model_config.json",
+    "system_config": "system_config.json"
+  },
+  "agent_settings": {
+    "TEST_MODE_ENABLED": true,
+    "TEST_BUY_QUANTITY": 1,
+    "TEST_BUY_PRICE_FACTOR": 0.95
+  },
+  "optuna_param_limits": {
+    "horizon": {
+      "min": 1.0,
+      "max": 20.0,
+      "optimize": true
+    },
+    "threshold": {
+      "min": 0.005,
+      "max": 0.2,
+      "optimize": true
+    },
+    "top_n_features": {
+      "min": 5.0,
+      "max": 70.0,
+      "optimize": true
+    },
+    "stop_loss_pct": {
+      "min": 0.5,
+      "max": 10.0,
+      "optimize": true
+    },
+    "take_profit_pct": {
+      "min": 0.5,
+      "max": 20.0,
+      "optimize": true
+    },
+    "risk_per_trade": {
+      "min": 0.005,
+      "max": 0.03,
+      "optimize": true
+    },
+    "learning_rate": {
+      "min": 0.02,
+      "max": 0.2,
+      "optimize": true
+    },
+    "n_estimators": {
+      "min": 200.0,
+      "max": 500.0,
+      "optimize": true
+    },
+    "max_depth": {
+      "min": 3.0,
+      "max": 12.0,
+      "optimize": true
+    }
+  }
+}

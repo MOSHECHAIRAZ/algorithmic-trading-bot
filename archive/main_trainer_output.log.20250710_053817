@@ -1,0 +1,25 @@
+2025-07-10 05:38:11,264 INFO --- Starting New Training Pipeline (Full Strategy Optimization) ---
+2025-07-10 05:38:11,329 INFO Loaded data from 2010-07-07 00:00:00 to 2025-07-07 00:00:00. Shape: (3773, 8)
+2025-07-10 05:38:11,329 INFO Step 1: Generating all features...
+2025-07-10 05:38:11,329 INFO --- [FOCUSED PARAMETER DEBUG] ---
+2025-07-10 05:38:11,329 INFO 
+--- Testing 'stoch' ---
+2025-07-10 05:38:11,329 INFO Attempt 1: Running 'stoch' without any parameters...
+2025-07-10 05:38:11,372 INFO   [V] SUCCESS: 'stoch' ran without parameters (unexpectedly).
+2025-07-10 05:38:11,372 INFO Attempt 2: Running 'stoch' with standard parameters: {'k': 14, 'd': 3, 'smooth_k': 3}
+2025-07-10 05:38:11,379 INFO   [V] SUCCESS: 'stoch' ran successfully with parameters.
+2025-07-10 05:38:11,379 INFO 
+--- Testing 'bbands' ---
+2025-07-10 05:38:11,379 INFO Attempt 1: Running 'bbands' without any parameters...
+2025-07-10 05:38:11,379 INFO   [V] SUCCESS: 'bbands' ran without parameters (unexpectedly).
+2025-07-10 05:38:11,379 INFO Attempt 2: Running 'bbands' with standard parameters: {'length': 20, 'std': 2}
+2025-07-10 05:38:11,379 INFO   [V] SUCCESS: 'bbands' ran successfully with parameters.
+2025-07-10 05:38:11,395 INFO 
+--- Testing 'atr' ---
+2025-07-10 05:38:11,395 INFO Attempt 1: Running 'atr' without any parameters...
+2025-07-10 05:38:11,396 INFO   [V] SUCCESS: 'atr' ran without parameters (unexpectedly).
+2025-07-10 05:38:11,396 INFO Attempt 2: Running 'atr' with standard parameters: {'length': 14}
+2025-07-10 05:38:11,397 INFO   [V] SUCCESS: 'atr' ran successfully with parameters.
+2025-07-10 05:38:11,397 INFO 
+--- [FOCUSED DEBUG] Finished. ---
+2025-07-10 05:38:11,397 INFO Proceeding with the rest of the indicators...

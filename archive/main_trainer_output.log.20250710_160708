@@ -1,0 +1,22 @@
+2025-07-10 15:53:19,448 INFO --- Starting New Training Pipeline (Full Strategy Optimization with Custom Metric) ---
+2025-07-10 15:53:19,471 INFO Loaded data from 2010-07-14 00:00:00 to 2025-07-09 00:00:00. Shape: (3770, 8)
+2025-07-10 15:53:19,472 INFO Step 1: Generating all features...
+2025-07-10 15:53:28,448 ERROR An error occurred during ta.strategy('all'): 'Series' object has no attribute 'append'
+2025-07-10 15:53:28,448 INFO Total features available for selection: 8
+2025-07-10 15:53:28,448 INFO Step 2: Running Optuna for FULL strategy optimization...
+2025-07-10 15:54:43,348 INFO --- Optuna Finished ---
+2025-07-10 15:54:43,348 INFO Best Custom Score on Validation: 137.0000
+2025-07-10 15:54:43,348 INFO Best Strategy Parameters Found: {'horizon': 9, 'threshold': 0.008, 'top_n_features': 50, 'n_estimators': 227, 'max_depth': 7, 'learning_rate': 0.018151868692635405, 'subsample': 0.6262235541705217, 'colsample_bytree': 0.8492754125868088}
+2025-07-10 15:54:47,247 INFO --- Final Performance Report on Test Set ---
+2025-07-10 15:54:47,247 INFO Test Accuracy: 0.5318
+2025-07-10 15:54:47,263 INFO 
+              precision    recall  f1-score   support
+
+           0       0.53      1.00      0.69      1604
+           1       0.00      0.00      0.00      1412
+
+    accuracy                           0.53      3016
+   macro avg       0.27      0.50      0.35      3016
+weighted avg       0.28      0.53      0.37      3016
+
+2025-07-10 15:54:47,263 INFO Step 5: Saving model, scaler, configuration, and summary...

@@ -1,0 +1,18 @@
+2025-07-10 03:04:40,844 INFO --- Starting New Training Pipeline (Bias Corrected) ---
+2025-07-10 03:04:40,861 INFO Loaded data from 2010-07-07 00:00:00 to 2025-07-07 00:00:00. Shape: (3773, 8)
+2025-07-10 03:04:40,861 INFO Step 1: Generating features for train and test sets (no look-ahead bias)...
+2025-07-10 03:04:40,861 INFO --- [DYNAMIC PARAMS] Attempting to calculate 147 indicators ---
+2025-07-10 03:05:02,905 INFO --- [DYNAMIC PARAMS] Finished Calculation ---
+2025-07-10 03:05:02,905 INFO Successfully attempted: 141 indicators.
+2025-07-10 03:05:02,905 WARNING Failed or skipped: 6 indicators.
+2025-07-10 03:05:03,392 INFO 
+Feature generation finished. Added 324 new features. Total columns: 332
+2025-07-10 03:05:03,392 INFO Checking for critical indicators in the final feature set:
+2025-07-10 03:05:03,392 INFO   [V] rsi - FOUND
+2025-07-10 03:05:03,392 INFO   [V] macd - FOUND
+2025-07-10 03:05:03,392 WARNING   [X] stoch - NOT FOUND
+2025-07-10 03:05:03,392 INFO   [V] adx - FOUND
+2025-07-10 03:05:03,392 WARNING   [X] bbands - NOT FOUND
+2025-07-10 03:05:03,392 WARNING   [X] atr - NOT FOUND
+2025-07-10 03:05:03,392 INFO   [V] obv - FOUND
+2025-07-10 03:05:03,425 INFO --- [DYNAMIC PARAMS] Attempting to calculate 147 indicators ---

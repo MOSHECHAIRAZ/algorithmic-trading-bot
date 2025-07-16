@@ -1,0 +1,29 @@
+2025-07-10 01:32:34,145 INFO --- Starting New Training Pipeline (Bias Corrected) ---
+2025-07-10 01:32:34,165 INFO Loaded data from 2010-07-07 00:00:00 to 2025-07-07 00:00:00. Shape: (3773, 8)
+2025-07-10 01:32:34,165 INFO Step 1: Generating features for train and test sets (no look-ahead bias)...
+2025-07-10 01:32:34,179 INFO --- Applying pandas_ta indicators ---
+2025-07-10 01:32:34,876 INFO --- Applying ta-lib indicators ---
+2025-07-10 01:32:34,905 INFO --- Applying pandas_ta indicators ---
+2025-07-10 01:32:35,379 INFO --- Applying ta-lib indicators ---
+2025-07-10 01:32:35,409 INFO Data split into Train: 3018 rows, Test: 755 rows.
+2025-07-10 01:32:35,409 INFO Step 2: Selecting top 40 features...
+2025-07-10 01:32:38,217 INFO Selected 11 features.
+2025-07-10 01:32:38,217 INFO Step 3: Running Optuna hyperparameter optimization...
+2025-07-10 01:32:48,129 INFO Best params found: {'n_estimators': 82, 'max_depth': 10, 'learning_rate': 0.036513970326310555, 'subsample': 0.7221604933860916, 'colsample_bytree': 0.9717343252975174}
+2025-07-10 01:32:48,130 INFO Step 4: Training final model and evaluating on test set...
+2025-07-10 01:32:48,178 INFO --- Performance Report on Test Set ---
+2025-07-10 01:32:48,178 INFO Test Accuracy: 0.6093
+2025-07-10 01:32:48,200 INFO 
+              precision    recall  f1-score   support
+
+           0       0.61      1.00      0.76       460
+           1       0.00      0.00      0.00       295
+
+    accuracy                           0.61       755
+   macro avg       0.30      0.50      0.38       755
+weighted avg       0.37      0.61      0.46       755
+
+2025-07-10 01:32:48,200 INFO Step 5: Saving model, scaler, configuration, and summary...
+2025-07-10 01:32:48,217 INFO Training summary saved to C:\Users\משה\פרויקט קופילוט למידת מכונה\models\training_summary.json
+2025-07-10 01:32:48,217 INFO Artifacts saved: C:\Users\משה\פרויקט קופילוט למידת מכונה\models\champion_model.pkl, C:\Users\משה\פרויקט קופילוט למידת מכונה\models\champion_scaler.pkl, C:\Users\משה\פרויקט קופילוט למידת מכונה\models\champion_model_config.json
+2025-07-10 01:32:48,217 INFO --- Training pipeline finished successfully! ---

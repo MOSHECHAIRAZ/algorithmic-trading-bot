@@ -1,0 +1,46 @@
+2025-07-10 05:38:11,264 INFO --- Starting New Training Pipeline (Full Strategy Optimization) ---
+2025-07-10 05:38:11,329 INFO Loaded data from 2010-07-07 00:00:00 to 2025-07-07 00:00:00. Shape: (3773, 8)
+2025-07-10 05:38:11,329 INFO Step 1: Generating all features...
+2025-07-10 05:38:11,329 INFO --- [FOCUSED PARAMETER DEBUG] ---
+2025-07-10 05:38:11,329 INFO 
+--- Testing 'stoch' ---
+2025-07-10 05:38:11,329 INFO Attempt 1: Running 'stoch' without any parameters...
+2025-07-10 05:38:11,372 INFO   [V] SUCCESS: 'stoch' ran without parameters (unexpectedly).
+2025-07-10 05:38:11,372 INFO Attempt 2: Running 'stoch' with standard parameters: {'k': 14, 'd': 3, 'smooth_k': 3}
+2025-07-10 05:38:11,379 INFO   [V] SUCCESS: 'stoch' ran successfully with parameters.
+2025-07-10 05:38:11,379 INFO 
+--- Testing 'bbands' ---
+2025-07-10 05:38:11,379 INFO Attempt 1: Running 'bbands' without any parameters...
+2025-07-10 05:38:11,379 INFO   [V] SUCCESS: 'bbands' ran without parameters (unexpectedly).
+2025-07-10 05:38:11,379 INFO Attempt 2: Running 'bbands' with standard parameters: {'length': 20, 'std': 2}
+2025-07-10 05:38:11,379 INFO   [V] SUCCESS: 'bbands' ran successfully with parameters.
+2025-07-10 05:38:11,395 INFO 
+--- Testing 'atr' ---
+2025-07-10 05:38:11,395 INFO Attempt 1: Running 'atr' without any parameters...
+2025-07-10 05:38:11,396 INFO   [V] SUCCESS: 'atr' ran without parameters (unexpectedly).
+2025-07-10 05:38:11,396 INFO Attempt 2: Running 'atr' with standard parameters: {'length': 14}
+2025-07-10 05:38:11,397 INFO   [V] SUCCESS: 'atr' ran successfully with parameters.
+2025-07-10 05:38:11,397 INFO 
+--- [FOCUSED DEBUG] Finished. ---
+2025-07-10 05:38:11,397 INFO Proceeding with the rest of the indicators...
+2025-07-10 05:38:38,735 INFO Total features available for selection: 283
+2025-07-10 05:38:38,735 INFO Step 2: Running Optuna for FULL strategy optimization...
+2025-07-10 05:41:45,629 INFO --- Optuna Finished ---
+2025-07-10 05:41:45,629 INFO Best F1-Score on Validation: 0.8356
+2025-07-10 05:41:45,629 INFO Best Strategy Parameters Found: {'horizon': 5, 'threshold': 0.002, 'top_n_features': 35, 'n_estimators': 304, 'max_depth': 6, 'learning_rate': 0.06437755440810897, 'subsample': 0.8367038736975705, 'colsample_bytree': 0.7438356663567125}
+2025-07-10 05:41:51,030 INFO --- Final Performance Report on Test Set ---
+2025-07-10 05:41:51,030 INFO Test Accuracy: 0.8119
+2025-07-10 05:41:51,036 INFO 
+              precision    recall  f1-score   support
+
+           0       0.79      0.78      0.78       332
+           1       0.83      0.84      0.83       423
+
+    accuracy                           0.81       755
+   macro avg       0.81      0.81      0.81       755
+weighted avg       0.81      0.81      0.81       755
+
+2025-07-10 05:41:51,036 INFO Step 5: Saving model, scaler, configuration, and summary...
+2025-07-10 05:41:51,077 INFO Training summary saved to C:\Users\משה\פרויקט קופילוט למידת מכונה\models\training_summary.json
+2025-07-10 05:41:51,077 INFO Artifacts saved: C:\Users\משה\פרויקט קופילוט למידת מכונה\models\champion_model.pkl, C:\Users\משה\פרויקט קופילוט למידת מכונה\models\champion_scaler.pkl, C:\Users\משה\פרויקט קופילוט למידת מכונה\models\champion_model_config.json
+2025-07-10 05:41:51,078 INFO --- Training pipeline finished successfully! ---

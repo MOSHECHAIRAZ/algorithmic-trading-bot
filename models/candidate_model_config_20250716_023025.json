@@ -1,0 +1,39 @@
+{
+  "training_run_timestamp": "20250716_023025",
+  "optuna_study_name": "spy_strategy_optimization",
+  "selected_features": [
+    "DPO_20",
+    "SMIo_5_20_5",
+    "BBB_5_2.0",
+    "J_9_3",
+    "CG_10",
+    "BULLP_13",
+    "BEARP_13",
+    "BBP_5_2.0",
+    "EFI_13"
+  ],
+  "params": {
+    "horizon": 7,
+    "threshold": 0.01735405303994848,
+    "top_n_features": 9,
+    "sl_atr_multiplier": 6.5787816295618535,
+    "tp_atr_multiplier": 9.9377849653165,
+    "risk_per_trade": 0.019130508125292163,
+    "learning_rate": 0.10385077072912927,
+    "n_estimators": 259,
+    "max_depth": 8
+  },
+  "scaler": true,
+  "risk_params": {
+    "sl_atr_multiplier": 6.5787816295618535,
+    "tp_atr_multiplier": 9.9377849653165,
+    "risk_per_trade": 0.019130508125292163
+  },
+  "contract": {
+    "symbol": "SPY",
+    "secType": "STK",
+    "exchange": "SMART",
+    "currency": "USD",
+    "primaryExch": "ARCA"
+  }
+}

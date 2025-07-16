@@ -1,0 +1,20 @@
+{
+  "name": "trading-agent",
+  "version": "1.1.0",
+  "description": "Node.js trading agent for algorithmic trading bot (Trend Following + ML + VIX)",
+  "main": "agent/trading_agent.js",
+  "scripts": {
+    "start": "node agent/trading_agent.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "ci-install": "npm ci"
+  },
+  "dependencies": {
+    "@stoqey/ib": "^1.5.1",
+    "axios": "^1.10.0",
+    "better-sqlite3": "^11.0.0",
+    "node-cron": "^3.0.3",
+    "winston": "^3.17.0"
+  },
+  "author": "",
+  "license": "MIT"
+}

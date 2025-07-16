@@ -1,0 +1,215 @@
+2025-07-10 02:56:37,978 INFO --- Starting New Training Pipeline (Bias Corrected) ---
+2025-07-10 02:56:37,996 INFO Loaded data from 2010-07-07 00:00:00 to 2025-07-07 00:00:00. Shape: (3773, 8)
+2025-07-10 02:56:37,996 INFO Step 1: Generating features for train and test sets (no look-ahead bias)...
+2025-07-10 02:56:37,996 INFO --- [COMPREHENSIVE DEBUG] Attempting to calculate 147 indicators one by one ---
+2025-07-10 02:56:59,735 INFO --- [COMPREHENSIVE DEBUG] Execution Report ---
+2025-07-10 02:56:59,735 INFO Total indicators processed: 147
+2025-07-10 02:56:59,735 INFO    >>> Successful: 72
+2025-07-10 02:56:59,735 INFO    >>> Failed/Skipped: 75
+2025-07-10 02:56:59,735 INFO 
+--- List of Successful Indicators ---
+2025-07-10 02:56:59,735 INFO mom, pgo, ppo, psl, pvo, qqe, roc, rsi, rsx, rvgi, slope, smi, squeeze, squeeze_pro, stc, stoch, stochrsi, td_seq, trix, tsi, uo, willr, midpoint, midprice, ohlc4, pwma, rma, sinwma, sma, ssf, supertrend, swma, t3, tema, trima, vidya, vwap, vwma, wcp, wma, zlma, percent_return, median, quantile, skew, stdev, tos_stdevall, variance, zscore, psar, qstick, ttm_trend, vhf, vortex, above, below, cross, cross_value, massi, natr, pdist, rvi, thermo, true_range, ui, mfi, nvi, pvi, pvol, pvr, pvt, vp
+2025-07-10 02:56:59,735 INFO 
+--- List of Failed/Skipped Indicators with Reasons ---
+2025-07-10 02:56:59,735 WARNING   - constants: AnalysisIndicators.constants() missing 1 required positional argument: 'values'
+2025-07-10 02:56:59,735 WARNING   - indicators: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - strategy: 'Series' object has no attribute 'append'
+2025-07-10 02:56:59,735 WARNING   - ticker: AnalysisIndicators.ticker() missing 1 required positional argument: 'ticker'
+2025-07-10 02:56:59,735 WARNING   - cdl_pattern: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - cdl_z: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - ha: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - ebsw: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - ao: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - apo: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - bias: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - bop: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - brar: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - cci: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - cfo: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - cg: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - cmo: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - coppock: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - cti: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - dm: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - er: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - eri: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - fisher: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - inertia: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - kdj: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - kst: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - macd: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - alma: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - dema: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - ema: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - fwma: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - hilo: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - hl2: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - hlc3: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - hma: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - hwma: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - jma: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - kama: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - ichimoku: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - linreg: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - mcgd: 'Series' object has no attribute 'append'
+2025-07-10 02:56:59,735 WARNING   - log_return: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - entropy: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - kurtosis: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - mad: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - adx: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - amat: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - aroon: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - chop: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - cksp: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - decay: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - decreasing: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - dpo: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - increasing: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - long_run: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - short_run: Ran without error, but added no columns.
+2025-07-10 02:56:59,735 WARNING   - tsignals: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - xsignals: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - above_value: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - below_value: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - aberration: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - accbands: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - atr: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - bbands: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - donchian: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - hwc: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - kc: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - ad: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - adosc: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - aobv: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - cmf: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - efi: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - eom: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - kvo: Ran without error, but added no columns.
+2025-07-10 02:56:59,744 WARNING   - obv: Ran without error, but added no columns.
+2025-07-10 02:57:00,128 INFO 
+Feature generation finished. Added 268 new features. Total columns: 276
+2025-07-10 02:57:00,128 INFO Checking for critical indicators in the final feature set:
+2025-07-10 02:57:00,128 INFO   [V] rsi - FOUND
+2025-07-10 02:57:00,128 INFO   [V] macd - FOUND
+2025-07-10 02:57:00,128 WARNING   [X] stoch - NOT FOUND
+2025-07-10 02:57:00,128 INFO   [V] adx - FOUND
+2025-07-10 02:57:00,128 WARNING   [X] bbands - NOT FOUND
+2025-07-10 02:57:00,128 WARNING   [X] atr - NOT FOUND
+2025-07-10 02:57:00,128 INFO   [V] obv - FOUND
+2025-07-10 02:57:00,161 INFO --- [COMPREHENSIVE DEBUG] Attempting to calculate 147 indicators one by one ---
+2025-07-10 02:57:25,326 INFO --- [COMPREHENSIVE DEBUG] Execution Report ---
+2025-07-10 02:57:25,326 INFO Total indicators processed: 147
+2025-07-10 02:57:25,326 INFO    >>> Successful: 72
+2025-07-10 02:57:25,326 INFO    >>> Failed/Skipped: 75
+2025-07-10 02:57:25,326 INFO 
+--- List of Successful Indicators ---
+2025-07-10 02:57:25,326 INFO mom, pgo, ppo, psl, pvo, qqe, roc, rsi, rsx, rvgi, slope, smi, squeeze, squeeze_pro, stc, stoch, stochrsi, td_seq, trix, tsi, uo, willr, midpoint, midprice, ohlc4, pwma, rma, sinwma, sma, ssf, supertrend, swma, t3, tema, trima, vidya, vwap, vwma, wcp, wma, zlma, percent_return, median, quantile, skew, stdev, tos_stdevall, variance, zscore, psar, qstick, ttm_trend, vhf, vortex, above, below, cross, cross_value, massi, natr, pdist, rvi, thermo, true_range, ui, mfi, nvi, pvi, pvol, pvr, pvt, vp
+2025-07-10 02:57:25,326 INFO 
+--- List of Failed/Skipped Indicators with Reasons ---
+2025-07-10 02:57:25,326 WARNING   - constants: AnalysisIndicators.constants() missing 1 required positional argument: 'values'
+2025-07-10 02:57:25,326 WARNING   - indicators: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - strategy: 'Series' object has no attribute 'append'
+2025-07-10 02:57:25,342 WARNING   - ticker: AnalysisIndicators.ticker() missing 1 required positional argument: 'ticker'
+2025-07-10 02:57:25,342 WARNING   - cdl_pattern: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - cdl_z: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - ha: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - ebsw: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - ao: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - apo: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - bias: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - bop: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - brar: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - cci: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - cfo: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - cg: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - cmo: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - coppock: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - cti: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - dm: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - er: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - eri: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - fisher: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - inertia: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - kdj: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - kst: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - macd: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - alma: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - dema: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - ema: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - fwma: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - hilo: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - hl2: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - hlc3: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - hma: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - hwma: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - jma: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - kama: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - ichimoku: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - linreg: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - mcgd: 'Series' object has no attribute 'append'
+2025-07-10 02:57:25,342 WARNING   - log_return: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - entropy: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - kurtosis: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - mad: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - adx: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - amat: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - aroon: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - chop: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - cksp: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - decay: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - decreasing: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - dpo: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - increasing: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - long_run: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - short_run: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - tsignals: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - xsignals: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - above_value: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - below_value: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - aberration: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - accbands: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - atr: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - bbands: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - donchian: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - hwc: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - kc: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - ad: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - adosc: Ran without error, but added no columns.
+2025-07-10 02:57:25,342 WARNING   - aobv: Ran without error, but added no columns.
+2025-07-10 02:57:25,358 WARNING   - cmf: Ran without error, but added no columns.
+2025-07-10 02:57:25,358 WARNING   - efi: Ran without error, but added no columns.
+2025-07-10 02:57:25,358 WARNING   - eom: Ran without error, but added no columns.
+2025-07-10 02:57:25,358 WARNING   - kvo: Ran without error, but added no columns.
+2025-07-10 02:57:25,358 WARNING   - obv: Ran without error, but added no columns.
+2025-07-10 02:57:25,707 INFO 
+Feature generation finished. Added 269 new features. Total columns: 277
+2025-07-10 02:57:25,707 INFO Checking for critical indicators in the final feature set:
+2025-07-10 02:57:25,707 INFO   [V] rsi - FOUND
+2025-07-10 02:57:25,707 INFO   [V] macd - FOUND
+2025-07-10 02:57:25,707 WARNING   [X] stoch - NOT FOUND
+2025-07-10 02:57:25,707 INFO   [V] adx - FOUND
+2025-07-10 02:57:25,707 WARNING   [X] bbands - NOT FOUND
+2025-07-10 02:57:25,707 WARNING   [X] atr - NOT FOUND
+2025-07-10 02:57:25,707 INFO   [V] obv - FOUND
+2025-07-10 02:57:25,753 INFO Data split into Train: 3018 rows, Test: 755 rows.
+2025-07-10 02:57:25,753 INFO Step 2: Selecting top 40 features...
+2025-07-10 02:57:30,162 INFO Selected 40 features.
+2025-07-10 02:57:30,162 INFO Step 3: Running Optuna hyperparameter optimization...
+2025-07-10 02:58:12,407 INFO Best params found: {'n_estimators': 98, 'max_depth': 4, 'learning_rate': 0.015047618176442274, 'subsample': 0.7768062684342752, 'colsample_bytree': 0.7183461188661695}
+2025-07-10 02:58:12,407 INFO Step 4: Training final model and evaluating on test set...
+2025-07-10 02:58:12,548 INFO --- Performance Report on Test Set ---
+2025-07-10 02:58:12,548 INFO Test Accuracy: 0.6649
+2025-07-10 02:58:12,548 INFO 
+              precision    recall  f1-score   support
+
+           0       0.71      0.76      0.74       460
+           1       0.58      0.51      0.54       295
+
+    accuracy                           0.66       755
+   macro avg       0.64      0.64      0.64       755
+weighted avg       0.66      0.66      0.66       755
+
+2025-07-10 02:58:12,548 INFO Step 5: Saving model, scaler, configuration, and summary...
+2025-07-10 02:58:12,563 INFO Training summary saved to C:\Users\משה\פרויקט קופילוט למידת מכונה\models\training_summary.json
+2025-07-10 02:58:12,563 INFO Artifacts saved: C:\Users\משה\פרויקט קופילוט למידת מכונה\models\champion_model.pkl, C:\Users\משה\פרויקט קופילוט למידת מכונה\models\champion_scaler.pkl, C:\Users\משה\פרויקט קופילוט למידת מכונה\models\champion_model_config.json
+2025-07-10 02:58:12,563 INFO --- Training pipeline finished successfully! ---

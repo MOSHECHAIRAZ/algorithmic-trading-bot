@@ -1,0 +1,4 @@
+2025-07-09 11:16:37,879 INFO --- Starting New Training Pipeline (Bias Corrected) ---
+2025-07-09 11:16:37,949 INFO Loaded data from 2010-07-07 00:00:00 to 2025-07-07 00:00:00. Shape: (3773, 8)
+2025-07-09 11:16:37,949 INFO Step 1: Generating all features on the full dataset...
+2025-07-09 11:16:38,241 ERROR 0it [00:00, ?it/s]
