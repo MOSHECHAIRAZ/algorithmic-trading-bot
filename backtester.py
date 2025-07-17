@@ -48,10 +48,7 @@ def run_backtest(data_path, config_path, model_path, scaler_path, output_suffix)
         
         model = joblib.load(model_path)
         # scaler_template loading removed (unused)
-        atr_feature = next((f for f in selected_features if 'ATR' in f.upper()), None)
-        if not atr_feature:
-            logging.warning('No ATR feature found. Fallback to fixed percentage risk.')
-
+        
         logging.info(f"Loaded model '{Path(model_path).name}' with {len(selected_features)} features.")
     except Exception as e:
         logging.error(f"Failed to load initial files for backtest: {e}", exc_info=True)
@@ -93,11 +90,12 @@ def run_backtest(data_path, config_path, model_path, scaler_path, output_suffix)
         commission=backtest_params.get('commission', 0.001),
         slippage=backtest_params.get('slippage', 0.0005),
         initial_balance=backtest_params.get('initial_balance', 100000),
-        sl_multiplier=risk_params.get('sl_atr_multiplier', 2.0),
-        tp_multiplier=risk_params.get('tp_atr_multiplier', 4.0),
+        # --- שורות מתוקנות ---
+        sl_pct=risk_params.get('stop_loss_pct', 5.0) / 100.0,  # קריאה מהקונפיגורציה של המודל והמרה לשבר עשרוני
+        tp_pct=risk_params.get('take_profit_pct', 10.0) / 100.0, # קריאה מהקונפיגורציה של המודל והמרה לשבר עשרוני
+        # ----------------------
         risk_per_trade=risk_params.get('risk_per_trade', 0.01),
-        atr_col=atr_feature if atr_feature else 'ATR_14',
-        log_trades=False
+        log_trades=False  # אין יותר צורך ב-atr_col
     )
     
     # --- עיבוד ושמירת תוצאות ---
