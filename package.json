@@ -1,12 +1,15 @@
 {
   "name": "trading-agent",
   "version": "1.1.0",
+  "type": "module",
   "description": "Node.js trading agent for algorithmic trading bot (Trend Following + ML + VIX)",
   "main": "agent/trading_agent.js",
   "scripts": {
     "start": "node agent/trading_agent.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "ci-install": "npm ci"
+    "ci-install": "npm ci",
+    "lint": "eslint agent/",
+    "lint:fix": "eslint agent/ --fix"
   },
   "dependencies": {
     "@stoqey/ib": "^1.5.1",
@@ -16,5 +19,8 @@
     "winston": "^3.17.0"
   },
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^9.31.0"
+  }
 }
