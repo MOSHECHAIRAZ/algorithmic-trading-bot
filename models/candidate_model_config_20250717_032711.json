@@ -1,0 +1,49 @@
+{
+  "training_run_timestamp": "20250717_032711",
+  "optuna_study_name": "spy_strategy_total_return_20250717_032711",
+  "selected_features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "average",
+    "barCount",
+    "vix_close",
+    "barcount",
+    "CDL_2CROWS",
+    "CDL_3INSIDE",
+    "CDL_3LINESTRIKE",
+    "CDL_3OUTSIDE",
+    "CDL_3WHITESOLDIERS",
+    "CDL_ADVANCEBLOCK",
+    "CDL_BELTHOLD",
+    "CDL_BREAKAWAY",
+    "CDL_CLOSINGMARUBOZU",
+    "CDL_COUNTERATTACK",
+    "CDL_DARKCLOUDCOVER",
+    "CDL_DOJI_10_0.1",
+    "CDL_DOJISTAR",
+    "CDL_DRAGONFLYDOJI",
+    "CDL_ENGULFING",
+    "CDL_EVENINGDOJISTAR"
+  ],
+  "params": {
+    "horizon": 2,
+    "threshold": 0.13512202084539388,
+    "top_n_features": 25
+  },
+  "scaler": true,
+  "risk_params": {
+    "stop_loss_pct": null,
+    "take_profit_pct": null,
+    "risk_per_trade": null
+  },
+  "contract": {
+    "symbol": "SPY",
+    "secType": "STK",
+    "exchange": "SMART",
+    "currency": "USD",
+    "primaryExch": "ARCA"
+  }
+}

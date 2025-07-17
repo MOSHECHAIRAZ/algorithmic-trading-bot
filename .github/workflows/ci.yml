@@ -19,7 +19,7 @@ jobs:
           python-version: '3.12'
 
       - name: Set up Node.js
-        uses:         Command Palette (Ctrl+Shift+P) → "GitHub: Sign in"
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 

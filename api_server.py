@@ -273,15 +273,27 @@ def get_backtest_summary(filename):
     """Gets a specific backtest summary."""
     results_dir = Path("reports/backtest_results")
     summary_file = results_dir / filename
+    
     if not summary_file.exists() or not filename.startswith("summary_"):
-        abort(404, "Backtest summary not found.")
+        # Return empty structure instead of 404
+        return jsonify({
+            "error": "File not found",
+            "message": f"Backtest summary '{filename}' not found in reports/backtest_results",
+            "filename": filename,
+            "data": {}
+        })
     
     try:
         with open(summary_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
         return jsonify(data)
     except Exception as e:
-        return jsonify({"error": f"Could not read summary file: {e}"}), 500
+        return jsonify({
+            "error": f"Could not read summary file: {e}",
+            "message": "Error reading backtest summary file",
+            "filename": filename,
+            "data": {}
+        })
 
 @app.route('/api/analysis/promote/<timestamp>', methods=['POST'])
 def promote_model(timestamp):
@@ -368,7 +380,14 @@ def get_optuna_analysis():
     """Gets Optuna study analysis."""
     db_path = Path('spy_strategy_optimization.db')
     if not db_path.exists():
-        return jsonify({"error": "Optuna database not found"}), 404
+        return jsonify({
+            "error": "Optuna database not found",
+            "message": "No Optuna studies available. Run training first to generate data.",
+            "study_name": None,
+            "trials": [],
+            "params": [],
+            "values": []
+        })
     
     try:
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
@@ -381,7 +400,14 @@ def get_optuna_analysis():
         
         if studies_df.empty:
             conn.close()
-            return jsonify({"error": "No studies found"}), 404
+            return jsonify({
+                "error": "No studies found",
+                "message": "Database exists but contains no studies. Run training first.",
+                "study_name": None,
+                "trials": [],
+                "params": [],
+                "values": []
+            })
         
         study_name = studies_df['study_name'].iloc[0]
         
@@ -413,7 +439,14 @@ def get_optuna_analysis():
         })
         
     except Exception as e:
-        return jsonify({"error": f"Failed to load Optuna data: {e}"}), 500
+        return jsonify({
+            "error": f"Failed to load Optuna data: {e}",
+            "message": "Database error occurred",
+            "study_name": None,
+            "trials": [],
+            "params": [],
+            "values": []
+        })
 
 # --- System Status ---
 @app.route('/api/system/status', methods=['GET'])

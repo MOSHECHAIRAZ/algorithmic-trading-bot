@@ -8,7 +8,21 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Lucide Icons -->
+         function initializeApp() {
+            setupNavigation();
+            switchPage('overview');
+            document.getElementById('refresh-position-btn').addEventListener('click', updateLivePosition);
+            
+            // Log selector event listener
+            const logSelector = document.getElementById('log-selector');
+            if (logSelector) {
+                logSelector.addEventListener('change', () => {
+                    if (logSelector.value) {
+                        loadLogContent();
+                    }
+                });
+            }
+        } Icons -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
     <!-- Chart.js for graphs -->
@@ -202,9 +216,20 @@
         };
         async function handleResponse(response) {
             if (!response.ok) {
-                const error = await response.json().catch(() => ({ error: 'Network response was not ok' }));
-                showToast(error.error || `Error ${response.status}`, 'error');
-                throw new Error(error.error);
+                let errorData;
+                try {
+                    errorData = await response.json();
+                } catch (e) {
+                    errorData = { error: 'Network response was not ok' };
+                }
+                
+                // Only show toast for actual errors, not missing data
+                if (response.status !== 404) {
+                    showToast(errorData.error || `Error ${response.status}`, 'error');
+                }
+                
+                // Return the error data structure for graceful handling
+                return errorData;
             }
             return response.json();
         }
@@ -420,9 +445,21 @@
         }
 
         function loadBacktestDetails(filename) {
-            apiClient.get(`/api/analysis/backtests/${filename}`).then(summary => {
+            apiClient.get(`/api/analysis/backtests/${filename}`).then(result => {
                 const metricsDiv = document.getElementById('backtest-metrics');
                 metricsDiv.innerHTML = '';
+                
+                if (result.error) {
+                    metricsDiv.innerHTML = `
+                        <div class="col-span-full bg-yellow-600/20 border border-yellow-600/50 p-4 rounded-lg">
+                            <h4 class="font-semibold text-yellow-400 mb-2">קובץ לא נמצא</h4>
+                            <p class="text-sm text-slate-300">${result.message}</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const summary = result;
                 const metricsToShow = { "תשואה": "total_return", "שארפ": "sharpe_ratio", "ירידה מירבית": "max_drawdown", "אחוז הצלחה": "win_rate" };
                 Object.entries(metricsToShow).forEach(([name, key]) => {
                     const val = summary[key] ? `${(summary[key] * 100).toFixed(2)}%` : 'N/A';
@@ -436,16 +473,20 @@
             const contentDiv = document.getElementById('staging-content');
             contentDiv.innerHTML = '<p>טוען מידע...</p>';
             Promise.all([
-                apiClient.get('/api/analysis/backtests/summary_champion.json').catch(() => null),
+                apiClient.get('/api/analysis/backtests/summary_champion.json').catch(() => ({ error: 'Champion not found' })),
                 apiClient.get('/api/analysis/training_summaries').then(s => s.length > 0 ? s[0] : null)
-            ]).then(([championSummary, latestCandidate]) => {
+            ]).then(([championResult, latestCandidate]) => {
                 if (!latestCandidate) {
                     contentDiv.innerHTML = '<p>לא נמצא מודל מועמד. יש לאמן מודל חדש.</p>';
                     return;
                 }
                 const candidateTs = latestCandidate.file_ts;
-                apiClient.get(`/api/analysis/backtests/summary_candidate_${candidateTs}.json`).catch(() => null)
-                    .then(candidateSummary => renderStagingTable(contentDiv, championSummary, candidateSummary, candidateTs));
+                apiClient.get(`/api/analysis/backtests/summary_candidate_${candidateTs}.json`).catch(() => ({ error: 'Candidate not found' }))
+                    .then(candidateResult => {
+                        const championSummary = championResult.error ? null : championResult;
+                        const candidateSummary = candidateResult.error ? null : candidateResult;
+                        renderStagingTable(contentDiv, championSummary, candidateSummary, candidateTs);
+                    });
             });
         }
 
@@ -511,6 +552,17 @@
             container.innerHTML = '<p>טוען נתוני Optuna...</p>';
             
             apiClient.get('/api/analysis/optuna').then(data => {
+                if (data.error) {
+                    container.innerHTML = `
+                        <div class="bg-yellow-600/20 border border-yellow-600/50 p-4 rounded-lg">
+                            <h4 class="font-semibold text-yellow-400 mb-2">אין נתוני Optuna</h4>
+                            <p class="text-sm text-slate-300 mb-3">${data.message}</p>
+                            <button onclick="startTraining()" class="btn btn-primary">התחל אימון</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
                 container.innerHTML = `
                     <h3 class="text-xl font-semibold mb-4">ניתוח Optuna - ${data.study_name}</h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

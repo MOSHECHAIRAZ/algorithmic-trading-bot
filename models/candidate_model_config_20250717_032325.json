@@ -1,0 +1,53 @@
+{
+  "training_run_timestamp": "20250717_032325",
+  "optuna_study_name": "spy_strategy_total_return_20250717_032325",
+  "selected_features": [
+    "DPO_20",
+    "BBP_5_2.0",
+    "PVOh_12_26_9",
+    "TRIXs_30_9",
+    "SMIo_5_20_5",
+    "AR_26",
+    "J_9_3",
+    "CG_10",
+    "volume",
+    "BBB_5_2.0",
+    "THERMO_20_2_0.5",
+    "EBSW_40_10",
+    "vix_close",
+    "STOCHRSIk_14_14_3_3",
+    "RVI_14",
+    "CMF_20",
+    "barcount",
+    "TRUERANGE_1",
+    "KURT_30",
+    "OBVe_12",
+    "PVOL",
+    "CHOP_14_1_100",
+    "PPOh_12_26_9",
+    "MACDh_12_26_9",
+    "ADX_14",
+    "QS_10",
+    "APO_12_26",
+    "BOP",
+    "PPOs_12_26_9",
+    "ER_10"
+  ],
+  "params": {
+    "horizon": 10,
+    "threshold": 0.03719910847219515
+  },
+  "scaler": true,
+  "risk_params": {
+    "stop_loss_pct": null,
+    "take_profit_pct": null,
+    "risk_per_trade": null
+  },
+  "contract": {
+    "symbol": "SPY",
+    "secType": "STK",
+    "exchange": "SMART",
+    "currency": "USD",
+    "primaryExch": "ARCA"
+  }
+}
