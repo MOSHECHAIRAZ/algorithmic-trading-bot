@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import logging
 
+
 def run_trading_simulation(
     prices_df: pd.DataFrame,
     predictions: pd.Series,
@@ -34,7 +35,7 @@ def run_trading_simulation(
 
     for i in range(len(aligned_prices) - 1):
         price = aligned_prices['close'].iloc[i]
-        open_next = aligned_prices['open'].iloc[i+1]
+        open_next = aligned_prices['open'].iloc[i + 1]
         high = aligned_prices['high'].iloc[i]
         low = aligned_prices['low'].iloc[i]
         pred = aligned_preds.iloc[i]

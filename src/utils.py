@@ -4,6 +4,7 @@ from datetime import datetime
 import logging
 import json
 
+
 def archive_existing_file(filepath):
     """
     אם קובץ קיים - מעביר אותו לארכיון עם חותמת זמן כדי למנוע דריסה.
@@ -22,10 +23,12 @@ def archive_existing_file(filepath):
         except Exception as e:
             logging.warning(f"Could not archive {filepath}: {e}")
 
+
 def load_system_config():
     """Loads the main system configuration file."""
     with open('system_config.json', 'r', encoding='utf-8') as f:
         return json.load(f)
+
 
 def save_system_config(config_data):
     """Saves data to the main system configuration file."""
