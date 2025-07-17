@@ -1,6 +1,18 @@
 import logging
 import os
+import sys
+import json
 from datetime import datetime
+from dotenv import load_dotenv
+import pandas as pd
+from ib_insync import IB, Stock, Index, util
+
+# הוספת הנתיב הראשי של הפרויקט כדי לאפשר ייבוא מ-src
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+from src.utils import load_system_config
 
 # --- Logging configuration ---
 os.makedirs('logs', exist_ok=True)
@@ -13,20 +25,6 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-from ib_insync import IB, Stock, Index, util
-import pandas as pd
-import os
-from datetime import datetime
-import json
-from dotenv import load_dotenv
-import sys
-
-# הוספת הנתיב הראשי של הפרויקט כדי לאפשר ייבוא מ-src
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
-
-from src.utils import load_system_config
 
 # --- טען קונפיגורציה מ-system_config.json ---
 system_config = load_system_config()
@@ -96,6 +94,7 @@ def fetch_all_historical_data(symbol='SPY', exchange='SMART', currency='USD', du
         ib.disconnect()
         logging.info("Disconnected from IBKR.")
 
+
 def fetch_option_greeks(symbol='SPY', exchange='SMART', currency='USD', expiry=None, strike=None, right='C'):
     """משיכת Greeks של אופציה בודדת לדוגמה"""
     from ib_insync import Option
@@ -119,6 +118,7 @@ def fetch_option_greeks(symbol='SPY', exchange='SMART', currency='USD', expiry=N
     finally:
         ib.disconnect()
 
+
 def fetch_book_data(symbol='SPY', exchange='SMART', currency='USD'):
     """משיכת עומק שוק (Level 2 Book) לדוגמה"""
     from ib_insync import Stock
@@ -141,6 +141,7 @@ def fetch_book_data(symbol='SPY', exchange='SMART', currency='USD'):
     finally:
         ib.disconnect()
 
+
 def fetch_fundamentals(symbol='SPY', exchange='SMART', currency='USD'):
     """משיכת נתונים פנדומנטליים לדוגמה (snapshot)"""
     from ib_insync import Stock
@@ -161,6 +162,7 @@ def fetch_fundamentals(symbol='SPY', exchange='SMART', currency='USD'):
         print(f"[ERROR] Fundamentals fetch failed: {e}")
     finally:
         ib.disconnect()
+
 
 if __name__ == "__main__":
     import sys

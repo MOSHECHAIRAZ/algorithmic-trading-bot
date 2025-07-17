@@ -4,21 +4,21 @@ Refactored for simplicity and consistency with the new training pipeline.
 """
 import sys
 import os
+import logging
+import json
+import joblib
+import pandas as pd
+import numpy as np
+import traceback
+from flask import Flask, request, jsonify
 
 # הוספת הנתיב הראשי של הפרויקט כדי לאפשר ייבוא מ-src
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-import logging
-import json
-import joblib
-import pandas as pd
-import numpy as np
-from flask import Flask, request, jsonify
 from src.utils import load_system_config
 from src.feature_calculator import FeatureCalculator
-import traceback
 
 # --- טעינת קונפיגורציה מרכזית ---
 config = load_system_config()
@@ -41,6 +41,7 @@ model = None
 scaler = None
 model_config = None
 selected_features = []
+
 
 def load_artifacts():
     """Loads the champion model, scaler, and configuration."""

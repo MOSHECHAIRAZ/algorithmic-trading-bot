@@ -8,7 +8,21 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-         function initializeApp() {
+         functi        function initializeApp() {
+            setupNavigation();
+            switchPage('overview');
+            document.getElementById('refresh-position-btn').addEventListener('click', updateLivePosition);
+            
+            // Log selector event listener
+            const logSelector = document.getElementById('log-selector');
+            if (logSelector) {
+                logSelector.addEventListener('change', () => {
+                    if (logSelector.value) {
+                        loadLogContent();
+                    }
+                });
+            }
+        }pp() {
             setupNavigation();
             switchPage('overview');
             document.getElementById('refresh-position-btn').addEventListener('click', updateLivePosition);
@@ -321,6 +335,7 @@
         }
 
         function initializeApp() {
+            setupNavigation();
             switchPage('overview');
             document.getElementById('refresh-position-btn').addEventListener('click', updateLivePosition);
             

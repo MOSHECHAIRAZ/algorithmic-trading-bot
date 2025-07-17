@@ -3,13 +3,14 @@ Unified Feature Calculator (Robust Version)
 מחשב אינדיקטורים באופן אינדיבידואלי כדי למנוע קריסה כללית.
 """
 import warnings
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
-
 import pandas as pd
 import pandas_ta as ta
 import numpy as np
 import logging
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+
 
 class FeatureCalculator:
     """
