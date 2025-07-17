@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>דשבורד ניהול - בוט מסחר אלגוריתמי</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Rubik', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .card {
+            background-color: #1e293b;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            border: 1px solid #334155;
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            transition: all 0.2s ease-in-out;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-primary { background-color: #3b82f6; color: white; }
+        .btn-primary:hover:not(:disabled) { background-color: #2563eb; }
+        .btn-secondary { background-color: #475569; color: white; }
+        .btn-secondary:hover:not(:disabled) { background-color: #334155; }
+        .btn-danger { background-color: #ef4444; color: white; }
+        .btn-danger:hover:not(:disabled) { background-color: #dc2626; }
+        
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-left: 8px; }
+        .status-green { background-color: #22c55e; }
+        .status-red { background-color: #ef4444; }
+        .status-gray { background-color: #64748b; }
+
+        .page-content, .tab-content { display: none; }
+        .page-content.active, .tab-content.active { display: block; }
+        
+        .tab-button { padding: 0.75rem 1.5rem; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.3s; }
+        .tab-button.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+
+        #toast {
+            position: fixed;
+            bottom: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            color: white;
+            font-weight: 500;
+            transition: bottom 0.5s ease-in-out;
+            z-index: 100;
+        }
+        #toast.show { bottom: 20px; }
+        #toast.success { background-color: #22c55e; }
+        #toast.error { background-color: #ef4444; }
+    </style>
+</head>
+<body class="flex min-h-screen">
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="bg-slate-900 text-white w-64 p-4 space-y-4 fixed top-0 right-0 h-full shadow-lg transition-transform duration-300 ease-in-out md:translate-x-0 -translate-x-full z-40">
+        <div class="flex items-center gap-3 mb-6">
+            <i data-lucide="bot" class="w-10 h-10 text-blue-400"></i>
+            <h1 class="text-xl font-bold">דשבורד ניהול</h1>
+        </div>
+        <nav class="space-y-2">
+            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors active" data-page="overview"><i data-lucide="layout-dashboard" class="w-6 h-6"></i><span>סקירה כללית</span></a>
+            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="management"><i data-lucide="server" class="w-6 h-6"></i><span>ניהול המערכת</span></a>
+            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="config"><i data-lucide="sliders-horizontal" class="w-6 h-6"></i><span>תצורת מערכת</span></a>
+            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="analysis"><i data-lucide="bar-chart-3" class="w-6 h-6"></i><span>ניתוח תוצאות</span></a>
+        </nav>
+        <div class="absolute bottom-4 right-4 left-4">
+             <button id="logout-button" class="btn btn-secondary w-full"><i data-lucide="log-out" class="w-4 h-4"></i><span>התנתק</span></button>
+        </div>
+    </aside>
+    
+    <!-- Mobile Menu Toggle -->
+    <button id="menu-toggle" class="md:hidden fixed top-4 right-4 z-50 p-2 bg-slate-700 rounded-md text-white">
+        <i data-lucide="menu" id="menu-open-icon"></i><i data-lucide="x" id="menu-close-icon" class="hidden"></i>
+    </button>
+
+    <!-- Main Content -->
+    <main class="flex-1 pr-0 md:pr-64 transition-all duration-300 ease-in-out">
+        <div class="p-4 md:p-8">
+
+            <!-- Page: Overview -->
+            <div id="page-overview" class="page-content active">
+                <h2 class="text-3xl font-bold mb-6">סקירה כללית</h2>
+                <div class="card mb-6">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="gamepad-2" class="text-blue-400"></i>פיקוד ידני</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <button class="btn btn-danger" onclick="sendAgentCommand({command: 'CLOSE_ALL'})"><i data-lucide="siren" class="w-4 h-4"></i>סגור כל הפוזיציות</button>
+                        <div class="flex items-center justify-center bg-slate-700/50 rounded-lg p-2 gap-3">
+                            <label for="pause-toggle">השהה כניסות חדשות</label>
+                            <input type="checkbox" id="pause-toggle" class="form-checkbox h-5 w-5 text-blue-500 rounded" onchange="togglePause(this.checked)">
+                        </div>
+                        <button class="btn btn-primary" onclick="sendAgentCommand({command: 'RESTART_LOGIC'})"><i data-lucide="refresh-cw" class="w-4 h-4"></i>הפעל לוגיקה מחדש</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2"><div class="card mb-6"><h3 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="activity" class="text-blue-400"></i>סטטוס מערכת בזמן אמת</h3><div id="system-status-grid" class="grid grid-cols-2 md:grid-cols-3 gap-4 text-center"></div></div></div>
+                    <div class="card"><h3 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="candlestick-chart" class="text-blue-400"></i>מצב פוזיציה חי</h3><div id="live-position-content" class="space-y-3"></div><button id="refresh-position-btn" class="btn btn-secondary w-full mt-4"><i data-lucide="refresh-cw" class="w-4 h-4"></i>רענן</button></div>
+                </div>
+            </div>
+
+            <!-- Page: System Management -->
+            <div id="page-management" class="page-content">
+                <h2 class="text-3xl font-bold mb-6">ניהול המערכת</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="card"><h3 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="database" class="text-blue-400"></i>בריאות נתונים</h3><table class="w-full text-left"><thead class="border-b border-slate-600"><tr><th class="p-2">קובץ</th><th class="p-2">תאריך שינוי</th><th class="p-2">גודל (MB)</th></tr></thead><tbody id="data-health-table"></tbody></table></div>
+                    <div class="card"><h3 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="workflow" class="text-blue-400"></i>הרצת תהליכים</h3><div class="space-y-3"><button class="btn btn-primary w-full text-lg py-3" onclick="startProcess('run_all')"><i data-lucide="rocket" class="w-5 h-5"></i>הרץ את כל התהליך</button><div class="flex gap-2 pt-4"><button class="btn btn-secondary flex-1" onclick="startProcess('data_collector')">1. איסוף</button><button class="btn btn-secondary flex-1" onclick="startProcess('preprocessor')">2. עיבוד</button><button class="btn btn-secondary flex-1" onclick="startProcess('main_trainer')">3. אימון</button></div></div></div>
+                </div>
+                
+                <!-- Logs Section -->
+                <div class="card mt-6">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="file-text" class="text-blue-400"></i>לוגים</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <select id="log-selector" class="bg-slate-700 border border-slate-600 rounded-lg p-2 mb-4 w-full">
+                                <option value="">בחר קובץ לוג...</option>
+                            </select>
+                            <div class="flex gap-2 mb-4">
+                                <button class="btn btn-secondary" onclick="loadLogContent()"><i data-lucide="refresh-cw" class="w-4 h-4"></i>רענן</button>
+                                <input type="number" id="log-lines" placeholder="מספר שורות (ברירת מחדל: 100)" class="bg-slate-700 border border-slate-600 rounded-lg p-2 flex-1">
+                            </div>
+                        </div>
+                        <div class="text-sm text-slate-400">
+                            <p>• main_trainer_output.log - יומן אימון המודל</p>
+                            <p>• backtester_output.log - יומן בקטסט</p>
+                            <p>• all_features_computed.log - יומן חישוב פיצ'רים</p>
+                            <p>• agent/trading_log.txt - יומן סוכן המסחר</p>
+                        </div>
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-lg mt-4">
+                        <pre id="log-content" class="text-sm text-slate-300 whitespace-pre-wrap max-h-96 overflow-y-auto">בחר קובץ לוג לצפייה...</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page: System Configuration -->
+            <div id="page-config" class="page-content"><h2 class="text-3xl font-bold mb-6">תצורת מערכת</h2><div class="card"><form id="config-form"></form></div></div>
+            
+            <!-- Page: Analysis -->
+            <div id="page-analysis" class="page-content">
+                <h2 class="text-3xl font-bold mb-6">ניתוח תוצאות</h2>
+                <div class="card">
+                    <div class="flex border-b border-slate-700 mb-6">
+                        <button class="tab-button active" data-tab="backtest">תוצאות Backtest</button>
+                        <button class="tab-button" data-tab="optuna">ניתוח Optuna</button>
+                        <button class="tab-button" data-tab="training-summary">סיכום אימונים</button>
+                        <button class="tab-button" data-tab="staging">קידום מודלים</button>
+                    </div>
+                    <div id="tab-backtest" class="tab-content active"><div id="backtest-analysis-content"></div></div>
+                    <div id="tab-optuna" class="tab-content"><div id="optuna-analysis-content"></div></div>
+                    <div id="tab-training-summary" class="tab-content"><h3 class="text-xl font-semibold mb-4">סיכום אימונים קודמים</h3><div id="training-summary-list" class="space-y-4"></div></div>
+                    <div id="tab-staging" class="tab-content"><h3 class="text-xl font-semibold mb-4">קידום מודלים</h3><div id="staging-content"></div></div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Login Overlay & Toast -->
+    <div id="login-overlay" class="fixed inset-0 bg-slate-900 bg-opacity-95 z-50 flex items-center justify-center"><div class="card w-full max-w-sm text-center"><h2 class="text-2xl font-bold mb-6">כניסה למערכת</h2><form id="login-form"><input type="password" id="password-input" placeholder="סיסמה" class="w-full bg-slate-600 p-3 rounded mb-4 text-center"><button type="submit" class="btn btn-primary w-full p-3">התחבר</button></form><p id="login-error" class="text-red-400 mt-4 hidden">סיסמה שגויה.</p></div></div>
+    <div id="toast"></div>
+
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:5001';
+        let charts = {}; // To hold chart instances
+
+        // --- API Client ---
+        const apiClient = {
+            get: (endpoint) => fetch(`${API_BASE_URL}${endpoint}`).then(handleResponse),
+            post: (endpoint, body) => fetch(`${API_BASE_URL}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            }).then(handleResponse),
+        };
+        async function handleResponse(response) {
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ error: 'Network response was not ok' }));
+                showToast(error.error || `Error ${response.status}`, 'error');
+                throw new Error(error.error);
+            }
+            return response.json();
+        }
+
+        // --- Toast Notifications ---
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = type;
+            toast.classList.add('show');
+            setTimeout(() => { toast.classList.remove('show'); }, 3000);
+        }
+
+        // --- Main App Logic ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            setupAuth();
+            setupNavigation();
+        });
+
+        function setupAuth() {
+            const loginOverlay = document.getElementById('login-overlay');
+            const loginForm = document.getElementById('login-form');
+            const passwordInput = document.getElementById('password-input');
+            const loginError = document.getElementById('login-error');
+            const logoutButton = document.getElementById('logout-button');
+            const correctPassword = "admin";
+
+            const checkAuth = () => {
+                if (sessionStorage.getItem('authenticated') === 'true') {
+                    loginOverlay.style.display = 'none';
+                    initializeApp();
+                } else {
+                    loginOverlay.style.display = 'flex';
+                }
+            };
+
+            loginForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                if (passwordInput.value === correctPassword) {
+                    sessionStorage.setItem('authenticated', 'true');
+                    checkAuth();
+                } else {
+                    loginError.classList.remove('hidden');
+                }
+            });
+            
+            logoutButton.addEventListener('click', () => {
+                sessionStorage.removeItem('authenticated');
+                checkAuth();
+            });
+
+            checkAuth();
+        }
+
+        function setupNavigation() {
+            const navLinks = document.querySelectorAll('.nav-link');
+            const pages = document.querySelectorAll('.page-content');
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            window.switchPage = (pageId) => {
+                pages.forEach(page => page.classList.toggle('active', page.id === `page-${pageId}`));
+                navLinks.forEach(link => {
+                    link.classList.toggle('active', link.dataset.page === pageId);
+                    link.classList.toggle('bg-slate-700', link.dataset.page === pageId);
+                });
+                loadPageData(pageId);
+            };
+
+            navLinks.forEach(link => link.addEventListener('click', (e) => {
+                e.preventDefault();
+                switchPage(link.dataset.page);
+            }));
+
+            tabButtons.forEach(button => button.addEventListener('click', () => {
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                const tabId = button.dataset.tab;
+                tabContents.forEach(content => content.classList.toggle('active', content.id === `tab-${tabId}`));
+            }));
+        }
+
+        function loadPageData(pageId) {
+            if (pageId === 'overview') { updateAllStatuses(); updateLivePosition(); }
+            if (pageId === 'management') { updateDataHealth(); loadLogsList(); }
+            if (pageId === 'config') { loadConfigForm(); }
+            if (pageId === 'analysis') { loadBacktestList(); loadTrainingSummaries(); loadStagingInfo(); loadOptunaAnalysis(); }
+        }
+
+        function initializeApp() {
+            switchPage('overview');
+            document.getElementById('refresh-position-btn').addEventListener('click', updateLivePosition);
+            
+            // Log selector event listener
+            const logSelector = document.getElementById('log-selector');
+            if (logSelector) {
+                logSelector.addEventListener('change', () => {
+                    if (logSelector.value) {
+                        loadLogContent();
+                    }
+                });
+            }
+            
+            // Log lines input event listener
+            const logLinesInput = document.getElementById('log-lines');
+            if (logLinesInput) {
+                logLinesInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        loadLogContent();
+                    }
+                });
+            }
+            
+            setInterval(updateAllStatuses, 5000);
+        }
+
+        // --- UI Rendering Functions ---
+        function updateAllStatuses() {
+            apiClient.get('/api/status/all').then(statuses => {
+                const grid = document.getElementById('system-status-grid');
+                grid.innerHTML = '';
+                Object.entries(statuses).forEach(([name, data]) => {
+                    const isRunning = data.status === 'running';
+                    grid.innerHTML += `<div class="bg-slate-700/50 p-4 rounded-lg">
+                            <p class="text-sm text-slate-400">${name.replace(/_/g, ' ')}</p>
+                            <p class="text-lg font-bold flex items-center justify-center gap-2">${isRunning ? 'פעיל' : 'כבוי'} <span class="status-dot ${isRunning ? 'status-green' : 'status-red'}"></span></p>
+                            <div class="mt-2"><button class="btn btn-sm ${isRunning ? 'btn-danger' : 'btn-primary'}" onclick="toggleProcess('${name}', ${isRunning})">${isRunning ? 'עצור' : 'הפעל'}</button></div>
+                        </div>`;
+                });
+                lucide.createIcons();
+            }).catch(err => console.error("Failed to update statuses:", err));
+        }
+
+        function updateLivePosition() {
+            const contentDiv = document.getElementById('live-position-content');
+            apiClient.get('/api/agent/position').then(data => {
+                if (!data.position || data.position === 'none') {
+                    contentDiv.innerHTML = `<div class="bg-blue-500/10 text-blue-300 p-3 rounded-lg"><p class="font-bold text-lg">אין פוזיציה פעילה</p></div>`;
+                } else {
+                    const pClass = data.position === 'long' ? 'bg-green-500/10 text-green-300' : 'bg-red-500/10 text-red-300';
+                    contentDiv.innerHTML = `<div class="${pClass} p-3 rounded-lg"><p class="font-bold text-lg">פוזיציית ${data.position === 'long' ? 'לונג' : 'שורט'} פעילה</p></div>
+                        <div class="grid grid-cols-2 gap-3 text-sm">
+                            <p><strong>גודל:</strong> ${data.size||'-'}</p><p><strong>כניסה:</strong> $${data.entryPrice||'-'}</p>
+                            <p><strong>SL:</strong> $${data.stopLoss||'-'}</p><p><strong>TP:</strong> $${data.takeProfit||'-'}</p>
+                        </div>`;
+                }
+            }).catch(err => contentDiv.innerHTML = `<p class="text-red-400">שגיאה בטעינת מצב הפוזיציה.</p>`);
+        }
+
+        function updateDataHealth() {
+            const tableBody = document.getElementById('data-health-table');
+            apiClient.get('/api/data_health').then(health => {
+                tableBody.innerHTML = '';
+                health.forEach(item => {
+                    tableBody.innerHTML += `<tr class="border-b border-slate-700"><td class="p-2">${item.file}</td><td class="p-2">${item.exists ? item.modified_date : 'לא קיים'}</td><td class="p-2">${item.exists ? item.size_mb : '-'}</td></tr>`;
+                });
+            });
+        }
+
+        function loadConfigForm() {
+            const form = document.getElementById('config-form');
+            apiClient.get('/api/config').then(config => {
+                form.innerHTML = '';
+                Object.entries(config).forEach(([section, params]) => {
+                    let fieldsHtml = '';
+                    Object.entries(params).forEach(([key, value]) => {
+                        fieldsHtml += `<div><label for="config-${section}-${key}" class="block text-sm mb-1">${key}</label><input type="${typeof value === 'number' ? 'number' : 'text'}" id="config-${section}-${key}" data-section="${section}" data-key="${key}" value='${JSON.stringify(value)}' class="w-full bg-slate-600 p-2 rounded"></div>`;
+                    });
+                    form.innerHTML += `<details class="mb-4" open><summary class="text-lg font-semibold cursor-pointer">${section}</summary><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-slate-700/50 rounded-lg">${fieldsHtml}</div></details>`;
+                });
+                form.innerHTML += `<div class="mt-6 text-right"><button type="submit" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i>שמור שינויים</button></div>`;
+                lucide.createIcons();
+                form.addEventListener('submit', handleConfigSave);
+            });
+        }
+        
+        function handleConfigSave(event) {
+            event.preventDefault();
+            const newConfig = {};
+            event.target.querySelectorAll('input').forEach(input => {
+                const { section, key } = input.dataset;
+                if (!newConfig[section]) newConfig[section] = {};
+                try { newConfig[section][key] = JSON.parse(input.value); } catch { newConfig[section][key] = input.value; }
+            });
+            apiClient.post('/api/config', newConfig).then(res => showToast(res.message));
+        }
+
+        function loadTrainingSummaries() {
+            const listDiv = document.getElementById('training-summary-list');
+            listDiv.innerHTML = '<p>טוען סיכומים...</p>';
+            apiClient.get('/api/analysis/training_summaries').then(summaries => {
+                listDiv.innerHTML = !summaries || summaries.length === 0 ? '<p>לא נמצאו סיכומי אימון.</p>' : '';
+                summaries.forEach(run => {
+                    const accuracy = run.test_accuracy ? `${(run.test_accuracy * 100).toFixed(2)}%` : 'N/A';
+                    listDiv.innerHTML += `<details class="bg-slate-700/50 p-4 rounded-lg"><summary class="font-semibold cursor-pointer">ריצה: ${new Date(run.timestamp).toLocaleString('he-IL')} | דיוק: ${accuracy}</summary><div class="mt-4 pt-4 border-t border-slate-600"><div class="flex flex-wrap gap-4 items-center"><button class="btn btn-primary btn-sm" onclick="runBacktest('${run.file_ts}')"><i data-lucide="bar-chart" class="w-4 h-4"></i>בקטסט</button></div><pre class="text-xs whitespace-pre-wrap mt-4">${JSON.stringify(run, null, 2)}</pre></div></details>`;
+                });
+                lucide.createIcons();
+            });
+        }
+        
+        function loadBacktestList() {
+            const container = document.getElementById('backtest-analysis-content');
+            apiClient.get('/api/analysis/backtests').then(files => {
+                const selectOptions = files.map(f => `<option value="${f}">${f}</option>`).join('');
+                container.innerHTML = `<h3 class="text-xl font-semibold mb-4">ניתוח Backtest</h3>
+                    <select id="backtest-selector" class="bg-slate-700 border border-slate-600 rounded-lg p-2 mb-4 w-full md:w-1/3">${selectOptions}</select>
+                    <div id="backtest-metrics" class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center mb-6"></div>
+                    <div><canvas id="equity-curve-chart"></canvas></div>`;
+                document.getElementById('backtest-selector').addEventListener('change', (e) => loadBacktestDetails(e.target.value));
+                if (files.length > 0) loadBacktestDetails(files[0]);
+            });
+        }
+
+        function loadBacktestDetails(filename) {
+            apiClient.get(`/api/analysis/backtests/${filename}`).then(summary => {
+                const metricsDiv = document.getElementById('backtest-metrics');
+                metricsDiv.innerHTML = '';
+                const metricsToShow = { "תשואה": "total_return", "שארפ": "sharpe_ratio", "ירידה מירבית": "max_drawdown", "אחוז הצלחה": "win_rate" };
+                Object.entries(metricsToShow).forEach(([name, key]) => {
+                    const val = summary[key] ? `${(summary[key] * 100).toFixed(2)}%` : 'N/A';
+                    metricsDiv.innerHTML += `<div class="bg-slate-700/50 p-4 rounded-lg"><p class="text-sm text-slate-400">${name}</p><p class="text-2xl font-bold">${val}</p></div>`;
+                });
+                // Here you would also fetch the equity curve data and update the chart
+            });
+        }
+
+        function loadStagingInfo() {
+            const contentDiv = document.getElementById('staging-content');
+            contentDiv.innerHTML = '<p>טוען מידע...</p>';
+            Promise.all([
+                apiClient.get('/api/analysis/backtests/summary_champion.json').catch(() => null),
+                apiClient.get('/api/analysis/training_summaries').then(s => s.length > 0 ? s[0] : null)
+            ]).then(([championSummary, latestCandidate]) => {
+                if (!latestCandidate) {
+                    contentDiv.innerHTML = '<p>לא נמצא מודל מועמד. יש לאמן מודל חדש.</p>';
+                    return;
+                }
+                const candidateTs = latestCandidate.file_ts;
+                apiClient.get(`/api/analysis/backtests/summary_candidate_${candidateTs}.json`).catch(() => null)
+                    .then(candidateSummary => renderStagingTable(contentDiv, championSummary, candidateSummary, candidateTs));
+            });
+        }
+
+        function renderStagingTable(container, champ, cand, candTs) {
+            const metrics = ["total_return", "sharpe_ratio", "max_drawdown", "win_rate"];
+            const hebrew = { "total_return": "תשואה", "sharpe_ratio": "שארפ", "max_drawdown": "ירידה מירבית", "win_rate": "אחוז הצלחה" };
+            let tableRows = '';
+            metrics.forEach(m => {
+                const champVal = champ && champ[m] ? `${(champ[m] * 100).toFixed(2)}%` : 'N/A';
+                const candVal = cand && cand[m] ? `${(cand[m] * 100).toFixed(2)}%` : 'N/A';
+                tableRows += `<tr class="border-b border-slate-700"><td class="p-2 text-right">${hebrew[m]}</td><td>${champVal}</td><td>${candVal}</td></tr>`;
+            });
+            container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="text-center p-4 bg-slate-700/50 rounded-lg"><h4 class="text-lg font-bold">מודל אלוף</h4><p class="text-sm text-slate-400">${champ ? 'קיים' : 'לא קיים'}</p></div><div class="text-center p-4 bg-slate-700/50 rounded-lg"><h4 class="text-lg font-bold">מודל מועמד</h4><p class="text-sm text-slate-400">${candTs}</p></div></div><div class="mt-6"><h4 class="font-semibold mb-2">השוואת ביצועים</h4><table class="w-full text-center"><thead class="border-b border-slate-600"><tr><th class="p-2 text-right">מדד</th><th>אלוף</th><th>מועמד</th></tr></thead><tbody>${tableRows}</tbody></table></div><div class="mt-6 text-center"><button class="btn btn-primary text-lg py-3 px-6" onclick="promoteModel('${candTs}')"><i data-lucide="rocket" class="w-5 h-5"></i>קדם לאלוף</button></div>`;
+            lucide.createIcons();
+        }
+
+        // --- Global Action Functions ---
+        window.toggleProcess = (name, isRunning) => apiClient.post(isRunning ? `/api/processes/stop/${name}` : `/api/processes/start/${name}`, {}).then(res => { showToast(res.message); updateAllStatuses(); });
+        window.startProcess = (name) => apiClient.post(`/api/processes/start/${name}`, {}).then(res => { showToast(res.message); setTimeout(updateAllStatuses, 1000); });
+        window.sendAgentCommand = (body) => apiClient.post('/api/agent/command', body).then(res => showToast(res.message));
+        window.togglePause = (isPaused) => sendAgentCommand({ command: 'PAUSE_NEW_ENTRIES', pause_new_entries: isPaused });
+        window.runBacktest = (ts) => { showToast(`מתחיל בקטסט עבור ${ts}...`); startProcess('backtester'); }; // Simplified
+        window.promoteModel = (ts) => { if (confirm(`האם אתה בטוח שברצונך לקדם את מודל ${ts} לאלוף?`)) { apiClient.post(`/api/analysis/promote/${ts}`, {}).then(res => { showToast(res.message); loadStagingInfo(); }); }};
+        
+        // --- Log Management Functions ---
+        function loadLogsList() {
+            const selector = document.getElementById('log-selector');
+            apiClient.get('/api/logs/list').then(logs => {
+                selector.innerHTML = '<option value="">בחר קובץ לוג...</option>';
+                logs.forEach(log => {
+                    const sizeKB = (log.size / 1024).toFixed(1);
+                    selector.innerHTML += `<option value="${log.name}">${log.name} (${sizeKB} KB)</option>`;
+                });
+            });
+        }
+        
+        window.loadLogContent = () => {
+            const selector = document.getElementById('log-selector');
+            const linesInput = document.getElementById('log-lines');
+            const contentDiv = document.getElementById('log-content');
+            
+            if (!selector.value) {
+                showToast('בחר קובץ לוג תחילה', 'error');
+                return;
+            }
+            
+            const lines = linesInput.value || 100;
+            const logFile = selector.value;
+            
+            contentDiv.textContent = 'טוען...';
+            
+            apiClient.get(`/api/logs/${logFile}?lines=${lines}`).then(data => {
+                contentDiv.textContent = data.content;
+                contentDiv.scrollTop = contentDiv.scrollHeight; // Scroll to bottom
+            }).catch(err => {
+                contentDiv.textContent = `שגיאה בטעינת הלוג: ${err.message}`;
+            });
+        };
+        
+        // --- Optuna Analysis Functions ---
+        function loadOptunaAnalysis() {
+            const container = document.getElementById('optuna-analysis-content');
+            container.innerHTML = '<p>טוען נתוני Optuna...</p>';
+            
+            apiClient.get('/api/analysis/optuna').then(data => {
+                container.innerHTML = `
+                    <h3 class="text-xl font-semibold mb-4">ניתוח Optuna - ${data.study_name}</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-slate-700/50 p-4 rounded-lg text-center">
+                            <p class="text-sm text-slate-400">מספר ניסיונות</p>
+                            <p class="text-2xl font-bold">${data.trials.length}</p>
+                        </div>
+                        <div class="bg-slate-700/50 p-4 rounded-lg text-center">
+                            <p class="text-sm text-slate-400">פרמטרים</p>
+                            <p class="text-2xl font-bold">${new Set(data.params.map(p => p.param_name)).size}</p>
+                        </div>
+                        <div class="bg-slate-700/50 p-4 rounded-lg text-center">
+                            <p class="text-sm text-slate-400">סטטוס</p>
+                            <p class="text-2xl font-bold">${data.trials.filter(t => t.state === 'COMPLETE').length} הושלמו</p>
+                        </div>
+                    </div>
+                    <div class="bg-slate-700/50 p-4 rounded-lg">
+                        <h4 class="font-semibold mb-2">ניסיונות אחרונים:</h4>
+                        <div class="space-y-2 max-h-64 overflow-y-auto">
+                            ${data.trials.slice(-10).map(trial => `
+                                <div class="flex justify-between items-center p-2 bg-slate-800 rounded">
+                                    <span>ניסיון #${trial.trial_id}</span>
+                                    <span class="text-sm ${trial.state === 'COMPLETE' ? 'text-green-400' : 'text-red-400'}">${trial.state}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).catch(err => {
+                container.innerHTML = `<p class="text-red-400">שגיאה בטעינת נתוני Optuna: ${err.message}</p>`;
+            });
+        }
+    </script>
+</body>
+</html>

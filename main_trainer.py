@@ -77,8 +77,12 @@ def objective(trial, df_raw, X_features_full, split_idx):
                 return trial.suggest_int(param_name, int(min_val), int(max_val))
             return trial.suggest_float(param_name, min_val, max_val, log=log)
         else:
-            # מחזיר את הערך הקבוע מהשדה 'min'
-            return p_config.get('min')
+            # מחזיר את הערך הקבוע מהשדה 'fixed_value' עם המרה לסוג הנתונים הנכון
+            fixed_value = p_config.get('fixed_value', p_config.get('min', 0))
+            if param_type == 'int':
+                return int(fixed_value)
+            else:
+                return float(fixed_value)
 
     horizon = get_param('horizon', 'int')
     threshold = get_param('threshold', 'float')
@@ -145,6 +149,9 @@ def main():
     df_raw = load_data()
     if df_raw is None: return
 
+    # הגדרת param_limits גם בפונקציה main
+    param_limits = config.get('optuna_param_limits', {})
+
     logging.info("Step 1: Generating all features...")
     fc = FeatureCalculator()
     X_features_full, _ = fc.add_all_possible_indicators(df_raw.copy(), verbose=True)
@@ -187,7 +194,25 @@ def main():
         logging.info(f'--- Optuna Finished ---\nBest Score for {selected_objective}: {best_trial.value:.4f}')
 
     best_params = best_trial.params
-    logging.info(f'Best Parameters: {json.dumps(best_params, indent=2)}')
+    
+    # הוספת הפרמטרים הקבועים לתוצאות
+    all_params = {}
+    for param_name, param_config in param_limits.items():
+        if param_name in best_params:
+            # פרמטר שעבר אופטימיזציה
+            all_params[param_name] = {
+                "value": best_params[param_name],
+                "optimized": True
+            }
+        else:
+            # פרמטר קבוע
+            all_params[param_name] = {
+                "value": param_config.get('fixed_value', param_config.get('min', 0)),
+                "optimized": False
+            }
+    
+    logging.info(f'Best Parameters (optimized + fixed): {json.dumps(all_params, indent=2)}')
+    logging.info(f'Original Best Parameters (optimized only): {json.dumps(best_params, indent=2)}')
 
     # --- Final model training on all training data with best params ---
     final_horizon, final_threshold = best_params['horizon'], best_params['threshold']
@@ -197,10 +222,24 @@ def main():
     X_train, y_train = X_train.align(y_train, join='inner', axis=0)
     X_test, y_test = X_test.align(y_test, join='inner', axis=0)
 
-    final_selected_features = rank_features(X_train, y_train, top_n=best_params['top_n_features'])
+    # קח את top_n_features מהקונפיגורציה או מ-best_params
+    top_n_features = best_params.get('top_n_features', 
+                                     int(param_limits['top_n_features'].get('fixed_value', 30)))
+    
+    final_selected_features = rank_features(X_train, y_train, top_n=top_n_features)
     X_train_final, X_test_final = X_train[final_selected_features], X_test[final_selected_features]
     
-    final_model_params = {k: v for k, v in best_params.items() if k in ['n_estimators', 'max_depth', 'learning_rate']}
+    final_model_params = {}
+    # קח את הפרמטרים מ-best_params או מהקונפיגורציה
+    for param in ['n_estimators', 'max_depth', 'learning_rate']:
+        if param in best_params:
+            final_model_params[param] = best_params[param]
+        elif param in param_limits:
+            if param == 'n_estimators' or param == 'max_depth':
+                final_model_params[param] = int(param_limits[param].get('fixed_value', 300 if param == 'n_estimators' else 6))
+            else:
+                final_model_params[param] = float(param_limits[param].get('fixed_value', 0.1))
+    
     final_scale_pos_weight = (y_train == 0).sum() / max(1, (y_train == 1).sum())
     final_model = LGBMClassifier(**final_model_params, scale_pos_weight=final_scale_pos_weight, random_state=42, verbosity=-1)
     
@@ -256,7 +295,8 @@ def main():
         "optuna_scores": best_trial.values,
         "test_accuracy": accuracy,
         "classification_report": report,
-        "best_params": best_params,
+        "best_params": best_params,  # רק הפרמטרים המאופטמיזציה
+        "all_params": all_params,    # כל הפרמטרים עם סימון אופטימיזציה
         "selected_features_list": final_selected_features
     }
     save_training_summary(training_summary)
