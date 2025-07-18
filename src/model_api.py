@@ -148,7 +148,6 @@ def predict():
 @app.route('/risk_params', methods=['GET'])
 def get_risk_params():
     try:
-        global model_config
         if model_config is None:
             raise ValueError("Model config not loaded in memory.")
         risk_params = model_config.get('risk_params', {})
