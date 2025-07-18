@@ -7,6 +7,13 @@
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Suppress Tailwind CSS development warnings
+        tailwind.config = {
+            important: true,
+            devtools: false
+        };
+    </script>
     
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -617,7 +624,7 @@
                             <div class="border border-slate-700 rounded-lg p-4">
                                 <button type="button" class="w-full flex items-center justify-between text-lg font-semibold mb-4 hover:bg-slate-800/50 p-2 rounded-lg" onclick="toggleSection('agent-settings')">
                                     <span class="flex items-center gap-2">
-                                        <i data-lucide="robot" class="text-blue-400"></i>הגדרות סוכן
+                                        <i data-lucide="bot" class="text-blue-400"></i>הגדרות סוכן
                                     </span>
                                     <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-agent-settings"></i>
                                 </button>
@@ -675,7 +682,7 @@
                                         <i data-lucide="trending-up" class="w-4 h-4"></i>אינדיקטורים טכניים
                                     </button>
                                     <button class="btn btn-secondary w-full" onclick="startFeatureCategory('candlestick')">
-                                        <i data-lucide="candle" class="w-4 h-4"></i>דפוסי נרות
+                                        <i data-lucide="candlestick-chart" class="w-4 h-4"></i>דפוסי נרות
                                     </button>
                                     <button class="btn btn-secondary w-full" onclick="startFeatureCategory('volume')">
                                         <i data-lucide="bar-chart-2" class="w-4 h-4"></i>פיצ'רי נפח
@@ -1398,6 +1405,9 @@
                 });
         }
 
+        // --- Global Variables ---
+        let currentPage = 'overview'; // Default page
+        
         // --- Main App Logic ---
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
@@ -1453,6 +1463,7 @@
             const tabContents = document.querySelectorAll('.tab-content');
 
             window.switchPage = (pageId) => {
+                currentPage = pageId; // Update current page
                 pages.forEach(page => page.classList.toggle('active', page.id === `page-${pageId}`));
                 navLinks.forEach(link => {
                     link.classList.toggle('active', link.dataset.page === pageId);
