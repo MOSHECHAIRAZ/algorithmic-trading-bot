@@ -149,8 +149,8 @@ class ModelTrainer:
         
         # Identify numeric columns for feature selection, excluding target and date columns
         exclude_cols = ['target', 'future_return', 'next_day_return', 'daily_return', 'log_return']
-        feature_cols = [col for col in self.feature_data.columns if col not in exclude_cols and
-                        pd.api.types.is_numeric_dtype(self.feature_data[col])]
+        feature_cols = [col for col in self.feature_data.columns if col not in exclude_cols
+                        and pd.api.types.is_numeric_dtype(self.feature_data[col])]
         
         # Fill NaN values with median
         X = self.feature_data[feature_cols].fillna(self.feature_data[feature_cols].median())
