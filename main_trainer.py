@@ -44,7 +44,17 @@ def save_training_summary(metrics: dict):
 
 def load_data():
     try:
-        df = pd.read_csv('data/processed/SPY_processed.csv', parse_dates=['date'], index_col='date')
+        # בדיקה אם קובץ פיצ'רים קיים
+        feature_data_path = config['system_paths'].get('feature_data', 'data/processed/SPY_features.csv')
+        if os.path.exists(feature_data_path):
+            logging.info(f"Loading pre-computed features from {feature_data_path}")
+            df = pd.read_csv(feature_data_path, parse_dates=['date'], index_col='date')
+        else:
+            # אחרת טען את הנתונים המעובדים הבסיסיים
+            logging.info("Feature file not found. Loading base processed data.")
+            df = pd.read_csv('data/processed/SPY_processed.csv', parse_dates=['date'], index_col='date')
+        
+        # סינון לפי שנים
         years_of_data = config.get('training_params', {}).get('years_of_data', 15)
         start_date = df.index.max() - pd.DateOffset(years=years_of_data)
         df = df[df.index >= start_date]
@@ -152,10 +162,12 @@ def main():
     # הגדרת param_limits גם בפונקציה main
     param_limits = config.get('optuna_param_limits', {})
 
-    logging.info("Step 1: Generating all features...")
-    fc = FeatureCalculator()
-    X_features_full, _ = fc.add_all_possible_indicators(df_raw.copy(), verbose=True)
+    logging.info("Step 1: Preparing features...")
+    # כבר טענו את הנתונים עם הפיצ'רים ב-load_data()
+    # נבצע רק ניקוי וסינון נתונים
+    X_features_full = df_raw.copy()
     X_features_full = X_features_full.select_dtypes(include=np.number).replace([np.inf, -np.inf], 0).fillna(0)
+    logging.info(f"Feature dataset ready with {X_features_full.shape[1]} columns.")
     
     test_size_split = config['training_params']['test_size_split'] / 100
     split_idx = int(len(X_features_full) * (1 - test_size_split))

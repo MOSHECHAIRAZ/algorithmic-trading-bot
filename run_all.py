@@ -32,6 +32,18 @@ def run_preprocessing():
         logging.error(f"Data preprocessing failed: {e}")
         raise
 
+def run_feature_engineering():
+    """
+    מריץ את תהליך חישוב הפיצ'רים בנפרד מתהליך האימון.
+    """
+    try:
+        logging.info("Running feature engineering script...")
+        subprocess.run([sys.executable, "src/feature_engineering.py"], check=True)
+        logging.info("Feature engineering completed.")
+    except Exception as e:
+        logging.error(f"Feature engineering failed: {e}")
+        raise
+
 def run_model_training():
     try:
         logging.info("Training new champion model...")
@@ -47,6 +59,6 @@ def run_model_training():
 if __name__ == "__main__":
     run_data_collection()
     run_preprocessing()
-    # run_market_regime_detection()  # שלב זה הוסר לחלוטין
+    run_feature_engineering()  # תוסף חדש - חישוב פיצ'רים בנפרד
     run_model_training()
     logging.info("All steps completed successfully.")

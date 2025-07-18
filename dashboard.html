@@ -8,41 +8,15 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-         functi        function initializeApp() {
-            setupNavigation();
-            switchPage('overview');
-            document.getElementById('refresh-position-btn').addEventListener('click', updateLivePosition);
-            
-            // Log selector event listener
-            const logSelector = document.getElementById('log-selector');
-            if (logSelector) {
-                logSelector.addEventListener('change', () => {
-                    if (logSelector.value) {
-                        loadLogContent();
-                    }
-                });
-            }
-        }pp() {
-            setupNavigation();
-            switchPage('overview');
-            document.getElementById('refresh-position-btn').addEventListener('click', updateLivePosition);
-            
-            // Log selector event listener
-            const logSelector = document.getElementById('log-selector');
-            if (logSelector) {
-                logSelector.addEventListener('change', () => {
-                    if (logSelector.value) {
-                        loadLogContent();
-                    }
-                });
-            }
-        } Icons -->
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
     <!-- Chart.js for graphs -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap');
@@ -82,6 +56,7 @@
         .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-left: 8px; }
         .status-green { background-color: #22c55e; }
         .status-red { background-color: #ef4444; }
+        .status-yellow { background-color: #f59e0b; }
         .status-gray { background-color: #64748b; }
 
         .page-content, .tab-content { display: none; }
@@ -89,6 +64,7 @@
         
         .tab-button { padding: 0.75rem 1.5rem; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.3s; }
         .tab-button.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+        .tab-button:hover { background-color: rgba(59, 130, 246, 0.1); }
 
         #toast {
             position: fixed;
@@ -105,6 +81,81 @@
         #toast.show { bottom: 20px; }
         #toast.success { background-color: #22c55e; }
         #toast.error { background-color: #ef4444; }
+        
+        /* Spinner Animation */
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #475569;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Progress Bar */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #475569;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: #3b82f6;
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+        
+        .progress-indeterminate {
+            height: 100%;
+            background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+            width: 30%;
+            animation: loading 1.5s infinite;
+        }
+        
+        @keyframes loading {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(333%); }
+        }
+        
+        /* Process Status */
+        .process-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            margin-top: 0.5rem;
+            border: 1px solid #374151;
+        }
+        
+        .process-status.running {
+            background-color: #065f46;
+            border-color: #10b981;
+        }
+        
+        .process-status.error {
+            background-color: #7f1d1d;
+            border-color: #ef4444;
+        }
+        
+        .process-status.success {
+            background-color: #064e3b;
+            border-color: #22c55e;
+        }
+        
+        .process-status.idle {
+            background-color: #374151;
+            border-color: #6b7280;
+        }
     </style>
 </head>
 <body class="flex min-h-screen">
@@ -113,13 +164,44 @@
     <aside id="sidebar" class="bg-slate-900 text-white w-64 p-4 space-y-4 fixed top-0 right-0 h-full shadow-lg transition-transform duration-300 ease-in-out md:translate-x-0 -translate-x-full z-40">
         <div class="flex items-center gap-3 mb-6">
             <i data-lucide="bot" class="w-10 h-10 text-blue-400"></i>
-            <h1 class="text-xl font-bold">דשבורד ניהול</h1>
+            <div class="flex-1">
+                <h1 class="text-xl font-bold">דשבורד ניהול</h1>
+                <div class="flex items-center gap-2 text-xs text-slate-400">
+                    <span>חיבור:</span>
+                    <span id="connection-status" class="status-dot status-red" title="מצב חיבור"></span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-400">
+                    <span>שרת:</span>
+                    <span id="server-status" class="text-red-400">בודק...</span>
+                </div>
+            </div>
         </div>
         <nav class="space-y-2">
-            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors active" data-page="overview"><i data-lucide="layout-dashboard" class="w-6 h-6"></i><span>סקירה כללית</span></a>
-            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="management"><i data-lucide="server" class="w-6 h-6"></i><span>ניהול המערכת</span></a>
-            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="config"><i data-lucide="sliders-horizontal" class="w-6 h-6"></i><span>תצורת מערכת</span></a>
-            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="analysis"><i data-lucide="bar-chart-3" class="w-6 h-6"></i><span>ניתוח תוצאות</span></a>
+            <!-- זרימת עבודה מסודרת -->
+            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors active" data-page="overview">
+                <i data-lucide="activity" class="w-6 h-6"></i><span>סטטוס מערכת</span>
+            </a>
+            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="data">
+                <i data-lucide="database" class="w-6 h-6"></i><span>ניהול נתונים</span>
+            </a>
+            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="features">
+                <i data-lucide="sparkles" class="w-6 h-6"></i><span>יצירת פיצ'רים</span>
+            </a>
+            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="training">
+                <i data-lucide="brain" class="w-6 h-6"></i><span>אימון מודל</span>
+            </a>
+            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="backtest">
+                <i data-lucide="trending-up" class="w-6 h-6"></i><span>בקטסט</span>
+            </a>
+            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="agent">
+                <i data-lucide="bot" class="w-6 h-6"></i><span>סוכן מסחר</span>
+            </a>
+            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="logs">
+                <i data-lucide="file-text" class="w-6 h-6"></i><span>לוגים</span>
+            </a>
+            <a href="#" class="nav-link flex items-center gap-3 p-3 rounded-lg hover:bg-slate-700 transition-colors" data-page="config">
+                <i data-lucide="sliders-horizontal" class="w-6 h-6"></i><span>תצורת מערכת</span>
+            </a>
         </nav>
         <div class="absolute bottom-4 right-4 left-4">
              <button id="logout-button" class="btn btn-secondary w-full"><i data-lucide="log-out" class="w-4 h-4"></i><span>התנתק</span></button>
@@ -135,44 +217,210 @@
     <main class="flex-1 pr-0 md:pr-64 transition-all duration-300 ease-in-out">
         <div class="p-4 md:p-8">
 
-            <!-- Page: Overview -->
+            <!-- Page: Overview (Status Only) -->
             <div id="page-overview" class="page-content active">
-                <h2 class="text-3xl font-bold mb-6">סקירה כללית</h2>
-                <div class="card mb-6">
-                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="gamepad-2" class="text-blue-400"></i>פיקוד ידני</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <button class="btn btn-danger" onclick="sendAgentCommand({command: 'CLOSE_ALL'})"><i data-lucide="siren" class="w-4 h-4"></i>סגור כל הפוזיציות</button>
-                        <div class="flex items-center justify-center bg-slate-700/50 rounded-lg p-2 gap-3">
-                            <label for="pause-toggle">השהה כניסות חדשות</label>
-                            <input type="checkbox" id="pause-toggle" class="form-checkbox h-5 w-5 text-blue-500 rounded" onchange="togglePause(this.checked)">
+                <h2 class="text-3xl font-bold mb-6">סטטוס מערכת</h2>
+                <!-- System Status Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2">
+                        <div class="card mb-6">
+                            <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                                <i data-lucide="activity" class="text-blue-400"></i>סטטוס מערכת בזמן אמת
+                            </h3>
+                            <div id="system-status-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center"></div>
                         </div>
-                        <button class="btn btn-primary" onclick="sendAgentCommand({command: 'RESTART_LOGIC'})"><i data-lucide="refresh-cw" class="w-4 h-4"></i>הפעל לוגיקה מחדש</button>
+                        
+                        <!-- Status Cards Row -->
+                        <div class="flex flex-col lg:flex-row gap-6 mb-6">
+                            <!-- API Status Card -->
+                            <div class="card lg:w-1/2">
+                                <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                                    <i data-lucide="server" class="text-blue-400"></i>סטטוס API
+                                </h3>
+                                <div id="api-status" class="p-4 rounded-lg text-center">
+                                    <div class="skeleton h-8 w-24 mx-auto mb-2"></div>
+                                    <div class="skeleton h-20 w-full"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Agent Status Card -->
+                            <div class="card lg:w-1/2">
+                                <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                                    <i data-lucide="bot" class="text-blue-400"></i>סטטוס סוכן מסחר
+                                </h3>
+                                <div id="agent-status" class="space-y-2 bg-slate-800/40 p-4 rounded-lg">
+                                    <div class="flex items-center justify-between">
+                                        <span>מצב לוגיקה:</span>
+                                        <span id="agent-logic-status" class="font-medium">טוען...</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span>כניסות חדשות:</span>
+                                        <span id="agent-entries-status" class="font-medium">טוען...</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span>עסקאות אחרונות:</span>
+                                        <span id="agent-trade-count" class="font-medium">טוען...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+
+                    </div>
+                    
+                    <!-- Live Position Card -->
+                    <div>
+                        <div class="card">
+                            <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                                <i data-lucide="candlestick-chart" class="text-blue-400"></i>מצב פוזיציה חי
+                            </h3>
+                            <div id="live-position-content" class="space-y-3 min-h-[180px] flex items-center justify-center">
+                                <div class="skeleton h-32 w-full"></div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 my-4">
+                                <div class="bg-slate-800/40 p-3 rounded-lg">
+                                    <p class="text-sm text-slate-400 mb-1">סימבול</p>
+                                    <p class="text-lg font-bold" id="position-symbol">-</p>
+                                </div>
+                                <div class="bg-slate-800/40 p-3 rounded-lg">
+                                    <p class="text-sm text-slate-400 mb-1">כיוון</p>
+                                    <p class="text-lg font-bold" id="position-direction">-</p>
+                                </div>
+                                <div class="bg-slate-800/40 p-3 rounded-lg">
+                                    <p class="text-sm text-slate-400 mb-1">גודל פוזיציה</p>
+                                    <p class="text-lg font-bold" id="position-size">-</p>
+                                </div>
+                                <div class="bg-slate-800/40 p-3 rounded-lg">
+                                    <p class="text-sm text-slate-400 mb-1">זמן כניסה</p>
+                                    <p class="text-lg font-bold" id="position-time">-</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Placeholder for spacing only -->
+                        
                     </div>
                 </div>
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="lg:col-span-2"><div class="card mb-6"><h3 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="activity" class="text-blue-400"></i>סטטוס מערכת בזמן אמת</h3><div id="system-status-grid" class="grid grid-cols-2 md:grid-cols-3 gap-4 text-center"></div></div></div>
-                    <div class="card"><h3 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="candlestick-chart" class="text-blue-400"></i>מצב פוזיציה חי</h3><div id="live-position-content" class="space-y-3"></div><button id="refresh-position-btn" class="btn btn-secondary w-full mt-4"><i data-lucide="refresh-cw" class="w-4 h-4"></i>רענן</button></div>
+                
+                <!-- System Information Row -->
+                <div class="mt-0">
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="info" class="text-blue-400"></i>מידע מערכתי
+                        </h3>
+                        
+                        <!-- All System Info in one grid -->
+                        <div id="system-info" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <!-- Cards will be populated by JavaScript -->
+                        </div>
+                        
+                        <div class="mt-4 text-xs text-right text-slate-500">
+                            <span id="system-info-timestamp">עדכון אחרון: -</span>
+                            <button id="refresh-system-info" class="ml-2 text-blue-400 hover:text-blue-300">
+                                <i data-lucide="refresh-cw" class="w-3 h-3 inline"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Page: System Management -->
-            <div id="page-management" class="page-content">
-                <h2 class="text-3xl font-bold mb-6">ניהול המערכת</h2>
+            <!-- Page: Command Control - REMOVED -->
+
+            <!-- Page: Data Management (NEW) -->
+            <div id="page-data" class="page-content">
+                <h2 class="text-3xl font-bold mb-6">ניהול נתונים</h2>
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="card"><h3 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="database" class="text-blue-400"></i>בריאות נתונים</h3><table class="w-full text-left"><thead class="border-b border-slate-600"><tr><th class="p-2">קובץ</th><th class="p-2">תאריך שינוי</th><th class="p-2">גודל (MB)</th></tr></thead><tbody id="data-health-table"></tbody></table></div>
-                    <div class="card"><h3 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="workflow" class="text-blue-400"></i>הרצת תהליכים</h3><div class="space-y-3"><button class="btn btn-primary w-full text-lg py-3" onclick="startProcess('run_all')"><i data-lucide="rocket" class="w-5 h-5"></i>הרץ את כל התהליך</button><div class="flex gap-2 pt-4"><button class="btn btn-secondary flex-1" onclick="startProcess('data_collector')">1. איסוף</button><button class="btn btn-secondary flex-1" onclick="startProcess('preprocessor')">2. עיבוד</button><button class="btn btn-secondary flex-1" onclick="startProcess('main_trainer')">3. אימון</button></div></div></div>
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="workflow" class="text-blue-400"></i>תהליכי נתונים
+                        </h3>
+                        <div class="space-y-3">
+                            <button class="btn btn-primary w-full text-lg py-3" onclick="startProcess('run_all')">
+                                <i data-lucide="rocket" class="w-5 h-5"></i>הרץ את כל תהליך הנתונים
+                            </button>
+                            <div class="process-status idle" data-process="run_all">
+                                <div class="spinner" style="display: none;"></div>
+                                <div class="progress-bar" style="display: none;"></div>
+                                <span class="status-text">מוכן</span>
+                            </div>
+                            
+                            <div class="mt-6 bg-slate-800/30 rounded-lg p-4">
+                                <h4 class="text-sm font-semibold mb-3">שלבי תהליך הנתונים:</h4>
+                                <div class="grid grid-cols-1 gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <button class="btn btn-secondary w-full" onclick="startProcess('data_collector')">
+                                            <i data-lucide="download" class="w-4 h-4"></i>1. איסוף נתונים
+                                        </button>
+                                    </div>
+                                    <div class="process-status idle" data-process="data_collector">
+                                        <div class="spinner" style="display: none;"></div>
+                                        <div class="progress-bar" style="display: none;"></div>
+                                        <span class="status-text">מוכן</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button class="btn btn-secondary w-full" onclick="startProcess('preprocessor')">
+                                            <i data-lucide="filter" class="w-4 h-4"></i>2. עיבוד נתונים
+                                        </button>
+                                    </div>
+                                    <div class="process-status idle" data-process="preprocessor">
+                                        <div class="spinner" style="display: none;"></div>
+                                        <div class="progress-bar" style="display: none;"></div>
+                                        <span class="status-text">מוכן</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="database" class="text-blue-400"></i>בריאות נתונים
+                        </h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-right">
+                                <thead class="border-b border-slate-600">
+                                    <tr>
+                                        <th class="p-2 text-right">קובץ</th>
+                                        <th class="p-2 text-right">תאריך שינוי</th>
+                                        <th class="p-2 text-right">מספר שורות</th>
+                                        <th class="p-2 text-right">תאריך התחלה</th>
+                                        <th class="p-2 text-right">תאריך סיום</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="data-health-table"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
                 
-                <!-- Logs Section -->
+                <!-- Data Reset Section -->
                 <div class="card mt-6">
-                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="file-text" class="text-blue-400"></i>לוגים</h3>
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="trash-2" class="text-red-400"></i>איפוס נתונים
+                    </h3>
+                    <div class="bg-slate-800/50 p-4 rounded-lg mb-4">
+                        <p>אפשרות זו תמחק את כל קבצי הנתונים ותתחיל את תהליך האיסוף מחדש.</p>
+                    </div>
+                    <button id="reset-data-btn" class="btn btn-danger" onclick="resetAllData()">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>אפס ואסוף הכל מחדש
+                    </button>
+                </div>
+            </div>
+
+            <!-- Page: Logs (NEW) -->
+            <div id="page-logs" class="page-content">
+                <h2 class="text-3xl font-bold mb-6">לוגים</h2>
+                <div class="card">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="file-text" class="text-blue-400"></i>צפייה בלוגים
+                    </h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <select id="log-selector" class="bg-slate-700 border border-slate-600 rounded-lg p-2 mb-4 w-full">
                                 <option value="">בחר קובץ לוג...</option>
                             </select>
                             <div class="flex gap-2 mb-4">
-                                <button class="btn btn-secondary" onclick="loadLogContent()"><i data-lucide="refresh-cw" class="w-4 h-4"></i>רענן</button>
+                                <button class="btn btn-secondary" onclick="loadLogContent()">
+                                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>רענן
+                                </button>
                                 <input type="number" id="log-lines" placeholder="מספר שורות (ברירת מחדל: 100)" class="bg-slate-700 border border-slate-600 rounded-lg p-2 flex-1">
                             </div>
                         </div>
@@ -190,24 +438,731 @@
             </div>
 
             <!-- Page: System Configuration -->
-            <div id="page-config" class="page-content"><h2 class="text-3xl font-bold mb-6">תצורת מערכת</h2><div class="card"><form id="config-form"></form></div></div>
-            
-            <!-- Page: Analysis -->
-            <div id="page-analysis" class="page-content">
-                <h2 class="text-3xl font-bold mb-6">ניתוח תוצאות</h2>
+            <div id="page-config" class="page-content">
+                <h2 class="text-3xl font-bold mb-6">תצורת מערכת</h2>
+                
+                <!-- Configuration Form -->
                 <div class="card">
-                    <div class="flex border-b border-slate-700 mb-6">
-                        <button class="tab-button active" data-tab="backtest">תוצאות Backtest</button>
-                        <button class="tab-button" data-tab="optuna">ניתוח Optuna</button>
-                        <button class="tab-button" data-tab="training-summary">סיכום אימונים</button>
-                        <button class="tab-button" data-tab="staging">קידום מודלים</button>
-                    </div>
-                    <div id="tab-backtest" class="tab-content active"><div id="backtest-analysis-content"></div></div>
-                    <div id="tab-optuna" class="tab-content"><div id="optuna-analysis-content"></div></div>
-                    <div id="tab-training-summary" class="tab-content"><h3 class="text-xl font-semibold mb-4">סיכום אימונים קודמים</h3><div id="training-summary-list" class="space-y-4"></div></div>
-                    <div id="tab-staging" class="tab-content"><h3 class="text-xl font-semibold mb-4">קידום מודלים</h3><div id="staging-content"></div></div>
+                    <form id="config-form">
+                        <div class="space-y-6">
+                            <!-- Training Parameters -->
+                            <div class="border border-slate-700 rounded-lg p-4">
+                                <button type="button" class="w-full flex items-center justify-between text-lg font-semibold mb-4 hover:bg-slate-800/50 p-2 rounded-lg" onclick="toggleSection('training-params')">
+                                    <span class="flex items-center gap-2">
+                                        <i data-lucide="brain" class="text-blue-400"></i>פרמטרי אימון
+                                    </span>
+                                    <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-training-params"></i>
+                                </button>
+                                <div id="training-params" class="grid grid-cols-1 md:grid-cols-2 gap-4" style="display: none;">
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">מספר ניסיונות Optuna</label>
+            שיש בכל מודל. בקטסט מימין מחיקה ב                             <input type="number" id="n_trials" name="n_trials" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="1" value="100">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">מספר קפלים (CV)</label>
+                                        <input type="number" id="cv_splits" name="cv_splits" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="2" value="5">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">אחוז בדיקה</label>
+                                        <input type="number" id="test_size_split" name="test_size_split" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="10" max="50" value="20">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">ניסיונות אקראיים</label>
+                                        <input type="number" id="n_startup_trials" name="n_startup_trials" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="0" value="10">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">שנות נתונים</label>
+                                        <input type="number" id="years_of_data" name="years_of_data" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="1" max="30" value="15">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">יעד אופטימיזציה</label>
+                                        <select id="optuna_target_metric" name="optuna_target_metric" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white">
+                                            <option value="multi_objective">רב-יעדי</option>
+                                            <option value="total_return">תשואה</option>
+                                            <option value="sharpe_ratio">שארפ</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Optuna Parameter Limits -->
+                            <div class="border border-slate-700 rounded-lg p-4">
+                                <button type="button" class="w-full flex items-center justify-between text-lg font-semibold mb-4 hover:bg-slate-800/50 p-2 rounded-lg" onclick="toggleSection('optuna-limits')">
+                                    <span class="flex items-center gap-2">
+                                        <i data-lucide="sliders" class="text-blue-400"></i>גבולות פרמטרי אופטימיזציה
+                                    </span>
+                                    <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-optuna-limits"></i>
+                                </button>
+                                <div id="optuna-limits" class="space-y-4" style="display: none;">
+                                    <div id="optuna-params" class="space-y-4">
+                                        <!-- Parameter controls will be generated here -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Backtest Parameters -->
+                            <div class="border border-slate-700 rounded-lg p-4">
+                                <button type="button" class="w-full flex items-center justify-between text-lg font-semibold mb-4 hover:bg-slate-800/50 p-2 rounded-lg" onclick="toggleSection('backtest-params')">
+                                    <span class="flex items-center gap-2">
+                                        <i data-lucide="trending-up" class="text-blue-400"></i>פרמטרי Backtest
+                                    </span>
+                                    <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-backtest-params"></i>
+                                </button>
+                                <div id="backtest-params" class="grid grid-cols-1 md:grid-cols-2 gap-4" style="display: none;">
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">יתרת התחלה ($)</label>
+                                        <input type="number" id="initial_balance" name="initial_balance" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="1000" value="100000">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">עמלה</label>
+                                        <input type="number" id="commission" name="commission" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="0" max="0.01" step="0.0001" value="0.001">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">החלקה</label>
+                                        <input type="number" id="slippage" name="slippage" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="0" max="0.01" step="0.0001" value="0.0005">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">ימי היסטוריה מינימליים</label>
+                                        <input type="number" id="min_history_days" name="min_history_days" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="30" max="365" value="100">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">אחוז גודל פוזיציה</label>
+                                        <input type="number" id="position_size_pct" name="position_size_pct" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="0.01" max="1.0" step="0.01" value="0.1">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Contract Settings -->
+                            <div class="border border-slate-700 rounded-lg p-4">
+                                <button type="button" class="w-full flex items-center justify-between text-lg font-semibold mb-4 hover:bg-slate-800/50 p-2 rounded-lg" onclick="toggleSection('contract-settings')">
+                                    <span class="flex items-center gap-2">
+                                        <i data-lucide="file-text" class="text-blue-400"></i>פרטי חוזה ונכס
+                                    </span>
+                                    <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-contract-settings"></i>
+                                </button>
+                                <div id="contract-settings" class="grid grid-cols-1 md:grid-cols-2 gap-4" style="display: none;">
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">סימבול</label>
+                                        <input type="text" id="symbol" name="symbol" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" value="SPY">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">סוג נייר ערך</label>
+                                        <select id="secType" name="secType" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white">
+                                            <option value="STK">מניות (STK)</option>
+                                            <option value="OPT">אופציות (OPT)</option>
+                                            <option value="FUT">עתידיים (FUT)</option>
+                                            <option value="CASH">מזומן (CASH)</option>
+                                            <option value="CFD">CFD</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">בורסה</label>
+                                        <input type="text" id="exchange" name="exchange" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" value="SMART">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">מטבע</label>
+                                        <select id="currency" name="currency" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white">
+                                            <option value="USD">USD</option>
+                                            <option value="EUR">EUR</option>
+                                            <option value="GBP">GBP</option>
+                                            <option value="JPY">JPY</option>
+                                            <option value="CAD">CAD</option>
+                                            <option value="AUD">AUD</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">בורסה ראשית</label>
+                                        <input type="text" id="primaryExch" name="primaryExch" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" value="ARCA">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Connection Settings -->
+                            <div class="border border-slate-700 rounded-lg p-4">
+                                <button type="button" class="w-full flex items-center justify-between text-lg font-semibold mb-4 hover:bg-slate-800/50 p-2 rounded-lg" onclick="toggleSection('connection-settings')">
+                                    <span class="flex items-center gap-2">
+                                        <i data-lucide="wifi" class="text-blue-400"></i>הגדרות חיבורים
+                                    </span>
+                                    <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-connection-settings"></i>
+                                </button>
+                                <div id="connection-settings" class="grid grid-cols-1 md:grid-cols-2 gap-4" style="display: none;">
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">כתובת API</label>
+                                        <input type="text" id="api_host" name="api_host" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" value="0.0.0.0">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">פורט API</label>
+                                        <input type="number" id="api_port" name="api_port" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="1024" max="65535" value="5000">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">כתובת IBKR</label>
+                                        <input type="text" id="ibkr_host" name="ibkr_host" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" value="127.0.0.1">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">פורט IBKR</label>
+                                        <input type="number" id="ibkr_port" name="ibkr_port" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="1024" max="65535" value="4001">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">IBKR Client ID</label>
+                                        <input type="number" id="clientId" name="clientId" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="1" value="101">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">חלון זמן נתונים</label>
+                                        <input type="text" id="history_window" name="history_window" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" value="90 D">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Agent Settings -->
+                            <div class="border border-slate-700 rounded-lg p-4">
+                                <button type="button" class="w-full flex items-center justify-between text-lg font-semibold mb-4 hover:bg-slate-800/50 p-2 rounded-lg" onclick="toggleSection('agent-settings')">
+                                    <span class="flex items-center gap-2">
+                                        <i data-lucide="robot" class="text-blue-400"></i>הגדרות סוכן
+                                    </span>
+                                    <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-agent-settings"></i>
+                                </button>
+                                <div id="agent-settings" class="grid grid-cols-1 md:grid-cols-2 gap-4" style="display: none;">
+                                    <div class="flex items-center space-x-2">
+                                        <input type="checkbox" id="TEST_MODE_ENABLED" name="TEST_MODE_ENABLED" class="w-4 h-4 text-blue-600 bg-slate-800 border-slate-600 rounded">
+                                        <label for="TEST_MODE_ENABLED" class="text-sm font-medium">מצב בדיקה</label>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">כמות בדיקה</label>
+                                        <input type="number" id="TEST_BUY_QUANTITY" name="TEST_BUY_QUANTITY" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="1" value="1">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">פקטור מחיר בדיקה</label>
+                                        <input type="number" id="TEST_BUY_PRICE_FACTOR" name="TEST_BUY_PRICE_FACTOR" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="0.5" max="1.5" step="0.01" value="0.95">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Save Button -->
+                            <div class="flex justify-end">
+                                <button type="button" class="btn btn-primary px-6 py-3 text-lg" onclick="saveConfiguration()">
+                                    <i data-lucide="save" class="w-5 h-5"></i>שמור שינויים
+                                </button>
+                            </div>
+                        </div>
+                    </form>
                 </div>
             </div>
+            
+            <!-- Page: Feature Engineering -->
+            <div id="page-features" class="page-content">
+                <h2 class="text-3xl font-bold mb-6">יצירת פיצ'רים ועיבודם</h2>
+                
+                <!-- Feature Engineering Controls -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="settings" class="text-blue-400"></i>בקרת יצירת פיצ'רים
+                        </h3>
+                        <div class="space-y-4">
+                            <button class="btn btn-primary w-full text-lg py-3" onclick="startProcess('feature_engineering')">
+                                <i data-lucide="sparkles" class="w-5 h-5"></i>יצירת כל הפיצ'רים
+                            </button>
+                            <div class="process-status idle" data-process="feature_engineering">
+                                <div class="spinner" style="display: none;"></div>
+                                <div class="progress-bar" style="display: none;"></div>
+                                <span class="status-text">מוכן</span>
+                            </div>
+                            
+                            <div class="bg-slate-800/30 rounded-lg p-4">
+                                <h4 class="text-sm font-semibold mb-3">פיצ'רים לפי קטגוריה:</h4>
+                                <div class="grid grid-cols-1 gap-2">
+                                    <button class="btn btn-secondary w-full" onclick="startFeatureCategory('technical')">
+                                        <i data-lucide="trending-up" class="w-4 h-4"></i>אינדיקטורים טכניים
+                                    </button>
+                                    <button class="btn btn-secondary w-full" onclick="startFeatureCategory('candlestick')">
+                                        <i data-lucide="candle" class="w-4 h-4"></i>דפוסי נרות
+                                    </button>
+                                    <button class="btn btn-secondary w-full" onclick="startFeatureCategory('volume')">
+                                        <i data-lucide="bar-chart-2" class="w-4 h-4"></i>פיצ'רי נפח
+                                    </button>
+                                    <button class="btn btn-secondary w-full" onclick="startFeatureCategory('statistical')">
+                                        <i data-lucide="calculator" class="w-4 h-4"></i>סטטיסטיקות
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="info" class="text-blue-400"></i>מידע על פיצ'רים
+                        </h3>
+                        <div id="feature-info" class="space-y-3">
+                            <div class="bg-slate-800/40 p-3 rounded-lg">
+                                <p class="text-sm text-slate-400 mb-1">סך הכל פיצ'רים</p>
+                                <p class="text-lg font-bold" id="total-features">-</p>
+                            </div>
+                            <div class="bg-slate-800/40 p-3 rounded-lg">
+                                <p class="text-sm text-slate-400 mb-1">פיצ'רים חדשים</p>
+                                <p class="text-lg font-bold" id="new-features">-</p>
+                            </div>
+                            <div class="bg-slate-800/40 p-3 rounded-lg">
+                                <p class="text-sm text-slate-400 mb-1">זמן עיבוד אחרון</p>
+                                <p class="text-lg font-bold" id="last-processing-time">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Feature Analysis -->
+                <div class="card">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="bar-chart-3" class="text-blue-400"></i>ניתוח פיצ'רים
+                    </h3>
+                    <div class="flex border-b border-slate-700 mb-6">
+                        <button class="tab-button active" data-tab="feature-importance">חשיבות פיצ'רים</button>
+                        <button class="tab-button" data-tab="feature-correlation">מתאמים</button>
+                        <button class="tab-button" data-tab="feature-distribution">התפלגות</button>
+                    </div>
+                    <div id="tab-feature-importance" class="tab-content active">
+                        <div id="feature-importance-chart" class="h-96 bg-slate-800/30 rounded-lg flex items-center justify-center">
+                            <p class="text-slate-400">יצירת גרף חשיבות פיצ'רים...</p>
+                        </div>
+                    </div>
+                    <div id="tab-feature-correlation" class="tab-content">
+                        <div id="feature-correlation-chart" class="h-96 bg-slate-800/30 rounded-lg flex items-center justify-center">
+                            <p class="text-slate-400">יצירת גרף מתאמים...</p>
+                        </div>
+                    </div>
+                    <div id="tab-feature-distribution" class="tab-content">
+                        <div id="feature-distribution-chart" class="h-96 bg-slate-800/30 rounded-lg flex items-center justify-center">
+                            <p class="text-slate-400">יצירת גרף התפלגות...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Page: Model Training -->
+            <div id="page-training" class="page-content">
+                <h2 class="text-3xl font-bold mb-6">אימון מודל ותוצאות</h2>
+                
+                <!-- Training Controls -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="brain" class="text-blue-400"></i>בקרת אימון
+                        </h3>
+                        <div class="space-y-4">
+                            <button class="btn btn-primary w-full text-lg py-3" onclick="startProcess('main_trainer')">
+                                <i data-lucide="play" class="w-5 h-5"></i>התחל אימון מלא
+                            </button>
+                            <div class="process-status idle" data-process="main_trainer">
+                                <div class="spinner" style="display: none;"></div>
+                                <div class="progress-bar" style="display: none;"></div>
+                                <span class="status-text">מוכן</span>
+                            </div>
+                            
+                            <div class="bg-slate-800/30 rounded-lg p-4">
+                                <h4 class="text-sm font-semibold mb-3">אימונים מתקדמים:</h4>
+                                <div class="grid grid-cols-1 gap-2">
+                                    <button class="btn btn-secondary w-full" onclick="startTrainingMode('quick')">
+                                        <i data-lucide="zap" class="w-4 h-4"></i>אימון מהיר
+                                    </button>
+                                    <button class="btn btn-secondary w-full" onclick="startTrainingMode('deep')">
+                                        <i data-lucide="layers" class="w-4 h-4"></i>אימון עמוק
+                                    </button>
+                                    <button class="btn btn-secondary w-full" onclick="startTrainingMode('hyperopt')">
+                                        <i data-lucide="settings" class="w-4 h-4"></i>אופטימיזציה
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="activity" class="text-blue-400"></i>סטטוס אימון
+                        </h3>
+                        <div id="training-status" class="space-y-3">
+                            <div class="bg-slate-800/40 p-3 rounded-lg">
+                                <p class="text-sm text-slate-400 mb-1">סטטוס נוכחי</p>
+                                <p class="text-lg font-bold" id="current-training-status">מוכן</p>
+                            </div>
+                            <div class="bg-slate-800/40 p-3 rounded-lg">
+                                <p class="text-sm text-slate-400 mb-1">התקדמות</p>
+                                <div class="w-full bg-slate-700 rounded-full h-2.5 mb-2">
+                                    <div class="bg-blue-600 h-2.5 rounded-full" style="width: 0%" id="training-progress"></div>
+                                </div>
+                                <p class="text-sm text-slate-400" id="training-progress-text">0%</p>
+                            </div>
+                            <div class="bg-slate-800/40 p-3 rounded-lg">
+                                <p class="text-sm text-slate-400 mb-1">זמן אחרון</p>
+                                <p class="text-lg font-bold" id="last-training-time">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Model Health Section -->
+                <div class="card mb-6">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="file-check" class="text-green-400"></i>בריאות מודלים
+                    </h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-700">
+                                    <th class="text-right p-3">קובץ</th>
+                                    <th class="text-right p-3">תאריך עדכון</th>
+                                    <th class="text-right p-3">מספר רשומות</th>
+                                    <th class="text-right p-3">מתאריך</th>
+                                    <th class="text-right p-3">עד תאריך</th>
+                                </tr>
+                            </thead>
+                            <tbody id="model-health-table">
+                                <tr>
+                                    <td colspan="5" class="text-center p-4 text-slate-400">טוען מידע על מודלים...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Training Results -->
+                <div class="card">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="target" class="text-blue-400"></i>תוצאות אימון
+                    </h3>
+                    <div class="flex border-b border-slate-700 mb-6">
+                        <button class="tab-button active" data-tab="training-metrics">מטריקות</button>
+                        <button class="tab-button" data-tab="training-charts">גרפים</button>
+                        <button class="tab-button" data-tab="training-comparison">השוואת מודלים</button>
+                        <button class="tab-button" data-tab="training-history">היסטוריה</button>
+                    </div>
+                    <div id="tab-training-metrics" class="tab-content active">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-slate-800/30 p-4 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">דיוק</p>
+                                <p class="text-2xl font-bold" id="training-accuracy">-</p>
+                            </div>
+                            <div class="bg-slate-800/30 p-4 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">F1 Score</p>
+                                <p class="text-2xl font-bold" id="training-f1">-</p>
+                            </div>
+                            <div class="bg-slate-800/30 p-4 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">AUC</p>
+                                <p class="text-2xl font-bold" id="training-auc">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="tab-training-charts" class="tab-content">
+                        <div id="training-charts-container" class="h-96 bg-slate-800/30 rounded-lg flex items-center justify-center">
+                            <p class="text-slate-400">יצירת גרפי אימון...</p>
+                        </div>
+                    </div>
+                    <div id="tab-training-comparison" class="tab-content">
+                        <div id="model-comparison-table" class="overflow-x-auto">
+                            <p class="text-slate-400">טוען השוואת מודלים...</p>
+                        </div>
+                    </div>
+                    <div id="tab-training-history" class="tab-content">
+                        <div id="training-history-list" class="space-y-4">
+                            <p class="text-slate-400">טוען היסטוריית אימונים...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Optuna Analysis Section -->
+                <div class="card">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="settings" class="text-purple-400"></i>ניתוח Optuna
+                    </h3>
+                    <div id="optuna-analysis-content"></div>
+                </div>
+                
+                <!-- Training Summary Section -->
+                <div class="card">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="list" class="text-blue-400"></i>סיכום אימונים
+                    </h3>
+                    <div id="training-summary-list-new" class="space-y-4"></div>
+                </div>
+            </div>
+            
+            <!-- Page: Backtest -->
+            <div id="page-backtest" class="page-content">
+                <h2 class="text-3xl font-bold mb-6">בקטסט</h2>
+                
+                <!-- Backtest Controls -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="play" class="text-blue-400"></i>בקרת בקטסט
+                        </h3>
+                        <div class="space-y-4">
+                            <button class="btn btn-primary w-full text-lg py-3" onclick="startProcess('backtester')">
+                                <i data-lucide="play" class="w-5 h-5"></i>הפעל בקטסט
+                            </button>
+                            <div class="process-status idle" data-process="backtester">
+                                <div class="spinner" style="display: none;"></div>
+                                <div class="progress-bar" style="display: none;"></div>
+                                <span class="status-text">מוכן</span>
+                            </div>
+                            
+                            <div class="bg-slate-800/30 rounded-lg p-4">
+                                <h4 class="text-sm font-semibold mb-3">הגדרות בקטסט מהיר:</h4>
+                                <div class="grid grid-cols-1 gap-3">
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">תקופת בדיקה (חודשים)</label>
+                                        <input type="number" id="backtest-period" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md text-white" min="1" max="60" value="12">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">יתרת התחלה</label>
+                                        <input type="number" id="backtest-balance" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md text-white" min="1000" value="100000">
+                                    </div>
+                                    <button class="btn btn-secondary w-full" onclick="runQuickBacktest()">
+                                        <i data-lucide="zap" class="w-4 h-4"></i>בקטסט מהיר
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="activity" class="text-blue-400"></i>סטטוס בקטסט
+                        </h3>
+                        <div id="backtest-status" class="space-y-3">
+                            <div class="bg-slate-800/40 p-3 rounded-lg">
+                                <p class="text-sm text-slate-400 mb-1">סטטוס נוכחי</p>
+                                <p class="text-lg font-bold" id="current-backtest-status">מוכן</p>
+                            </div>
+                            <div class="bg-slate-800/40 p-3 rounded-lg">
+                                <p class="text-sm text-slate-400 mb-1">התקדמות</p>
+                                <div class="w-full bg-slate-700 rounded-full h-2.5 mb-2">
+                                    <div class="bg-green-600 h-2.5 rounded-full" style="width: 0%" id="backtest-progress"></div>
+                                </div>
+                                <p class="text-sm text-slate-400" id="backtest-progress-text">0%</p>
+                            </div>
+                            <div class="bg-slate-800/40 p-3 rounded-lg">
+                                <p class="text-sm text-slate-400 mb-1">בקטסט אחרון</p>
+                                <p class="text-lg font-bold" id="last-backtest-time">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Backtest Results -->
+                <div class="card">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="bar-chart-3" class="text-blue-400"></i>תוצאות בקטסט
+                    </h3>
+                    <div class="flex border-b border-slate-700 mb-6">
+                        <button class="tab-button active" data-tab="backtest-performance">ביצועים</button>
+                        <button class="tab-button" data-tab="backtest-equity">עקומת רווח</button>
+                        <button class="tab-button" data-tab="backtest-trades">עסקאות</button>
+                        <button class="tab-button" data-tab="backtest-metrics">מדדים</button>
+                    </div>
+                    <div id="tab-backtest-performance" class="tab-content active">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div class="bg-slate-800/30 p-4 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">תשואה כוללת</p>
+                                <p class="text-2xl font-bold" id="backtest-total-return">-</p>
+                            </div>
+                            <div class="bg-slate-800/30 p-4 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">יחס שארפ</p>
+                                <p class="text-2xl font-bold" id="backtest-sharpe">-</p>
+                            </div>
+                            <div class="bg-slate-800/30 p-4 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">מקסימום נסיגה</p>
+                                <p class="text-2xl font-bold" id="backtest-max-drawdown">-</p>
+                            </div>
+                            <div class="bg-slate-800/30 p-4 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">אחוז הצלחות</p>
+                                <p class="text-2xl font-bold" id="backtest-win-rate">-</p>
+                            </div>
+                        </div>
+                        <div id="backtest-performance-chart" class="h-64 bg-slate-800/30 rounded-lg flex items-center justify-center">
+                            <p class="text-slate-400">טוען גרף ביצועים...</p>
+                        </div>
+                    </div>
+                    <div id="tab-backtest-equity" class="tab-content">
+                        <div id="backtest-equity-chart" class="h-96 bg-slate-800/30 rounded-lg flex items-center justify-center">
+                            <p class="text-slate-400">טוען עקומת רווח...</p>
+                        </div>
+                    </div>
+                    <div id="tab-backtest-trades" class="tab-content">
+                        <div id="backtest-trades-table" class="overflow-x-auto">
+                            <p class="text-slate-400">טוען טבלת עסקאות...</p>
+                        </div>
+                    </div>
+                    <div id="tab-backtest-metrics" class="tab-content">
+                        <div id="backtest-metrics-details" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <p class="text-slate-400">טוען מדדים מפורטים...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Backtest Analysis Results -->
+                <div class="card">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="line-chart" class="text-blue-400"></i>ניתוח תוצאות מפורט
+                    </h3>
+                    <div id="backtest-analysis-content"></div>
+                </div>
+                
+                <!-- Model Promotion Section -->
+                <div class="card">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="trending-up" class="text-green-400"></i>קידום מודלים
+                    </h3>
+                    <div id="staging-content"></div>
+                </div>
+            </div>
+            
+            <!-- Page: Trading Agent -->
+            <div id="page-agent" class="page-content">
+                <h2 class="text-3xl font-bold mb-6 flex items-center gap-3">
+                    <i data-lucide="bot" class="text-blue-400"></i>סוכן מסחר
+                </h2>
+                
+                <!-- Agent Controls -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="power" class="text-blue-400"></i>בקרת סוכן
+                        </h3>
+                        <div class="space-y-4">
+                            <button class="btn btn-primary w-full text-lg py-3" onclick="startProcess('trading_agent')">
+                                <i data-lucide="play" class="w-5 h-5"></i>הפעל סוכן מסחר
+                            </button>
+                            <div class="process-status idle" data-process="trading_agent">
+                                <div class="spinner" style="display: none;"></div>
+                                <div class="progress-bar" style="display: none;"></div>
+                                <span class="status-text">מוכן</span>
+                            </div>
+                            
+                            <div class="bg-slate-800/30 rounded-lg p-4">
+                                <h4 class="text-sm font-semibold mb-3">מצב פעולה:</h4>
+                                <div class="grid grid-cols-1 gap-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm">מצב בדיקה</span>
+                                        <span class="text-sm font-bold" id="agent-test-mode">פעיל</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm">חיבור IBKR</span>
+                                        <span class="text-sm font-bold" id="agent-ibkr-connection">לא מחובר</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm">מודל פעיל</span>
+                                        <span class="text-sm font-bold" id="agent-active-model">לא טעון</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-2">
+                                <button class="btn btn-secondary" onclick="stopProcess('trading_agent')">
+                                    <i data-lucide="square" class="w-4 h-4"></i>עצור
+                                </button>
+                                <button class="btn btn-secondary" onclick="restartAgent()">
+                                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>אתחל
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="activity" class="text-blue-400"></i>סטטוס סוכן
+                        </h3>
+                        <div id="agent-status-detailed" class="space-y-3">
+                            <div class="bg-slate-800/40 p-3 rounded-lg">
+                                <p class="text-sm text-slate-400 mb-1">סטטוס נוכחי</p>
+                                <p class="text-lg font-bold" id="current-agent-status">כבוי</p>
+                            </div>
+                            <div class="bg-slate-800/40 p-3 rounded-lg">
+                                <p class="text-sm text-slate-400 mb-1">פעולה אחרונה</p>
+                                <p class="text-lg font-bold" id="agent-last-action">-</p>
+                            </div>
+                            <div class="bg-slate-800/40 p-3 rounded-lg">
+                                <p class="text-sm text-slate-400 mb-1">זמן פעילות</p>
+                                <p class="text-lg font-bold" id="agent-uptime">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Agent Performance -->
+                <div class="card">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="trending-up" class="text-blue-400"></i>ביצועי סוכן
+                    </h3>
+                    <div class="flex border-b border-slate-700 mb-6">
+                        <button class="tab-button active" data-tab="agent-positions">פוזיציות</button>
+                        <button class="tab-button" data-tab="agent-orders">פקודות</button>
+                        <button class="tab-button" data-tab="agent-performance">ביצועים</button>
+                        <button class="tab-button" data-tab="agent-logs">לוגים</button>
+                    </div>
+                    <div id="tab-agent-positions" class="tab-content active">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div class="bg-slate-800/30 p-4 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">פוזיציות פתוחות</p>
+                                <p class="text-2xl font-bold" id="agent-open-positions">0</p>
+                            </div>
+                            <div class="bg-slate-800/30 p-4 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">רווח/הפסד יומי</p>
+                                <p class="text-2xl font-bold" id="agent-daily-pnl">$0.00</p>
+                            </div>
+                            <div class="bg-slate-800/30 p-4 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">רווח/הפסד כולל</p>
+                                <p class="text-2xl font-bold" id="agent-total-pnl">$0.00</p>
+                            </div>
+                        </div>
+                        <div id="agent-positions-table" class="overflow-x-auto">
+                            <p class="text-slate-400">טוען טבלת פוזיציות...</p>
+                        </div>
+                    </div>
+                    <div id="tab-agent-orders" class="tab-content">
+                        <div id="agent-orders-table" class="overflow-x-auto">
+                            <p class="text-slate-400">טוען טבלת פקודות...</p>
+                        </div>
+                    </div>
+                    <div id="tab-agent-performance" class="tab-content">
+                        <div id="agent-performance-chart" class="h-64 bg-slate-800/30 rounded-lg flex items-center justify-center">
+                            <p class="text-slate-400">טוען גרף ביצועים...</p>
+                        </div>
+                    </div>
+                    <div id="tab-agent-logs" class="tab-content">
+                        <div id="agent-logs-content" class="bg-slate-800/30 rounded-lg p-4 h-64 overflow-y-auto">
+                            <p class="text-slate-400">טוען לוגים...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Manual Command Control -->
+                <div class="card">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="gamepad-2" class="text-blue-400"></i>פיקוד ידני
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <button class="btn btn-danger" onclick="sendAgentCommand({command: 'CLOSE_ALL'})">
+                            <i data-lucide="siren" class="w-4 h-4"></i>סגור כל הפוזיציות
+                        </button>
+                        <div class="flex items-center justify-center bg-slate-700/50 rounded-lg p-2 gap-3">
+                            <label for="pause-toggle">השהה כניסות חדשות</label>
+                            <input type="checkbox" id="pause-toggle" class="form-checkbox h-5 w-5 text-blue-500 rounded" onchange="togglePause(this.checked)">
+                        </div>
+                        <button class="btn btn-primary" onclick="sendAgentCommand({command: 'RESTART_LOGIC'})">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>הפעל לוגיקה מחדש
+                        </button>
+                    </div>
+                    
+                    <!-- Command History -->
+                    <div class="mt-6 pt-6 border-t border-slate-700">
+                        <h4 class="text-lg font-semibold mb-3">היסטוריית פקודות אחרונות</h4>
+                        <div id="command-history" class="bg-slate-800 p-4 rounded-lg max-h-60 overflow-y-auto">
+                            <div class="text-sm text-slate-400">טוען היסטוריה...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Page: Analysis - REMOVED -->
         </div>
     </main>
     
@@ -218,6 +1173,137 @@
     <script>
         const API_BASE_URL = 'http://127.0.0.1:5001';
         let charts = {}; // To hold chart instances
+        let socket = null; // WebSocket connection
+        let isConnected = false;
+        let reconnectInterval = null;
+        let fallbackIntervals = []; // Store fallback intervals
+        let lastDisconnectToast = 0; // Track when last disconnect toast was shown
+
+        // --- WebSocket Connection Manager ---
+        function initializeWebSocket() {
+            console.log('🔌 Initializing WebSocket connection...');
+            
+            // Check if io is available
+            if (typeof io === 'undefined') {
+                console.error('❌ Socket.IO library not loaded!');
+                return;
+            }
+            
+            socket = io(API_BASE_URL, {
+                transports: ['websocket', 'polling'],
+                timeout: 10000,
+                forceNew: true
+            });
+
+            socket.on('connect', () => {
+                console.log('✅ WebSocket connected');
+                isConnected = true;
+                clearInterval(reconnectInterval);
+                clearFallbackIntervals();
+                showToast('חיבור WebSocket הופעל', 'success');
+                
+                // Update connection status indicator
+                updateConnectionStatus(true);
+            });
+
+            socket.on('disconnect', () => {
+                console.log('❌ WebSocket disconnected');
+                isConnected = false;
+                
+                // Only show toast if it's been more than 10 seconds since last disconnect toast
+                const now = Date.now();
+                if (now - lastDisconnectToast > 10000) {
+                    showToast('חיבור WebSocket נותק - עובר לרענון ידני', 'error');
+                    lastDisconnectToast = now;
+                }
+                
+                // Update connection status indicator
+                updateConnectionStatus(false);
+                
+                // Start fallback polling
+                startFallbackPolling();
+                
+                // Try to reconnect
+                attemptReconnection();
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('❌ WebSocket connection error:', error);
+                isConnected = false;
+                updateConnectionStatus(false);
+                startFallbackPolling();
+                attemptReconnection();
+            });
+
+            // Event handlers for real-time updates
+            socket.on('status_update', (data) => {
+                console.log('📊 Received status update via WebSocket');
+                updateStatusDisplay(data);
+            });
+
+            socket.on('system_info', (data) => {
+                console.log('🔧 Received system info via WebSocket:', data);
+                console.log('🔧 Data type:', typeof data);
+                if (data && data.memory) {
+                    console.log('🔧 Memory data:', data.memory);
+                }
+                if (data && data.disk) {
+                    console.log('🔧 Disk data:', data.disk);
+                }
+                updateSystemInfoDisplay(data);
+            });
+
+            socket.on('position_update', (data) => {
+                console.log('💹 Received position update via WebSocket');
+                updatePositionDisplay(data);
+            });
+        }
+
+        function attemptReconnection() {
+            if (reconnectInterval) return;
+            
+            reconnectInterval = setInterval(() => {
+                if (!isConnected) {
+                    console.log('🔄 Attempting WebSocket reconnection...');
+                    socket.connect();
+                }
+            }, 5000);
+        }
+
+        function startFallbackPolling() {
+            if (fallbackIntervals.length > 0) return; // Already started
+            
+            console.log('🔄 Starting fallback polling...');
+            
+            // Fallback intervals (slower than WebSocket)
+            fallbackIntervals.push(
+                setInterval(() => apiClient.get('/api/status/all').then(updateStatusDisplay).catch(err => {
+                    console.log('⚠️  שגיאה בטעינת סטטוס:', err.message);
+                }), 60000),
+                setInterval(() => apiClient.get('/api/system/info').then(data => {
+                    console.log('🔄 HTTP Polling - system info:', data);
+                    updateSystemInfoDisplay(data);
+                }).catch(err => {
+                    console.log('⚠️  שגיאה בטעינת מידע מערכת:', err.message);
+                }), 90000),
+                setInterval(() => apiClient.get('/api/agent/position').then(updatePositionDisplay).catch(err => {
+                    console.log('⚠️  שגיאה בטעינת פוזיציה:', err.message);
+                }), 30000)
+            );
+        }
+
+        function clearFallbackIntervals() {
+            fallbackIntervals.forEach(interval => clearInterval(interval));
+            fallbackIntervals = [];
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusIndicator = document.getElementById('connection-status');
+            if (statusIndicator) {
+                statusIndicator.className = connected ? 'status-dot status-green' : 'status-dot status-red';
+                statusIndicator.title = connected ? 'חיבור WebSocket פעיל' : 'חיבור WebSocket לא פעיל';
+            }
+        }
 
         // --- API Client ---
         const apiClient = {
@@ -227,6 +1313,15 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             }).then(handleResponse),
+            put: (endpoint, body) => fetch(`${API_BASE_URL}${endpoint}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            }).then(handleResponse),
+            delete: (endpoint) => fetch(`${API_BASE_URL}${endpoint}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+            }).then(handleResponse),
         };
         async function handleResponse(response) {
             if (!response.ok) {
@@ -234,16 +1329,28 @@
                 try {
                     errorData = await response.json();
                 } catch (e) {
-                    errorData = { error: 'Network response was not ok' };
+                    // Handle different types of network errors
+                    if (response.status === 0) {
+                        errorData = { error: 'אין חיבור לשרת' };
+                    } else if (response.status >= 500) {
+                        errorData = { error: 'שגיאה בשרת - נסה שוב מאוחר יותר' };
+                    } else if (response.status === 404) {
+                        errorData = { error: 'המשאב לא נמצא' };
+                    } else if (response.status === 403) {
+                        errorData = { error: 'אין הרשאה לפעולה זו' };
+                    } else {
+                        errorData = { error: `שגיאה ${response.status}: ${response.statusText}` };
+                    }
                 }
                 
                 // Only show toast for actual errors, not missing data
                 if (response.status !== 404) {
-                    showToast(errorData.error || `Error ${response.status}`, 'error');
+                    const errorMsg = errorData.error || `שגיאה ${response.status}`;
+                    showToast(errorMsg, 'error');
                 }
                 
                 // Return the error data structure for graceful handling
-                return errorData;
+                throw errorData;
             }
             return response.json();
         }
@@ -257,11 +1364,51 @@
             setTimeout(() => { toast.classList.remove('show'); }, 3000);
         }
 
+        // --- Server Health Check ---
+        function checkServerHealth() {
+            fetch(`${API_BASE_URL}/api/health`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`שרת לא זמין (${response.status})`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('✅ שרת זמין:', data);
+                    // Update UI to show server is healthy
+                    const serverStatus = document.getElementById('server-status');
+                    if (serverStatus) {
+                        serverStatus.textContent = 'מחובר';
+                        serverStatus.className = 'text-green-400';
+                    }
+                })
+                .catch(err => {
+                    console.error('❌ שרת לא זמין:', err.message);
+                    showToast('שרת לא זמין - מנסה להתחבר מחדש...', 'error');
+                    
+                    // Update UI to show server is down
+                    const serverStatus = document.getElementById('server-status');
+                    if (serverStatus) {
+                        serverStatus.textContent = 'לא מחובר';
+                        serverStatus.className = 'text-red-400';
+                    }
+                    
+                    // Try to reconnect after 5 seconds
+                    setTimeout(checkServerHealth, 5000);
+                });
+        }
+
         // --- Main App Logic ---
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
             setupAuth();
             setupNavigation();
+            
+            // Check server health on startup
+            checkServerHealth();
+            
+            // Check server health every 2 minutes
+            setInterval(checkServerHealth, 120000);
         });
 
         function setupAuth() {
@@ -329,15 +1476,20 @@
 
         function loadPageData(pageId) {
             if (pageId === 'overview') { updateAllStatuses(); updateLivePosition(); }
-            if (pageId === 'management') { updateDataHealth(); loadLogsList(); }
+            if (pageId === 'data') { updateDataHealth(); }
+            if (pageId === 'training') { updateModelHealth(); loadTrainingSummaries(); loadOptunaAnalysis(); }
+            if (pageId === 'backtest') { loadBacktestList(); loadStagingInfo(); }
+            if (pageId === 'agent') { loadCommandHistory(); }
+            if (pageId === 'logs') { loadLogsList(); }
             if (pageId === 'config') { loadConfigForm(); }
-            if (pageId === 'analysis') { loadBacktestList(); loadTrainingSummaries(); loadStagingInfo(); loadOptunaAnalysis(); }
         }
 
         function initializeApp() {
             setupNavigation();
             switchPage('overview');
-            document.getElementById('refresh-position-btn').addEventListener('click', updateLivePosition);
+            
+            // Initialize WebSocket connection
+            initializeWebSocket();
             
             // Log selector event listener
             const logSelector = document.getElementById('log-selector');
@@ -359,62 +1511,621 @@
                 });
             }
             
-            setInterval(updateAllStatuses, 5000);
+            // Set up refresh button for system info
+            const refreshSystemInfoBtn = document.getElementById('refresh-system-info');
+            if (refreshSystemInfoBtn) {
+                refreshSystemInfoBtn.addEventListener('click', updateSystemInfo);
+            }
+            
+            // Initial data loading - always load first, then WebSocket will take over
+            updateAllStatuses();
+            updateLivePosition();
+            updateAPIStatus();
+            updateAgentStatus();
+            updateSystemInfo();
+            
+            // Remove old periodic refresh - WebSocket will handle this
+            // Old intervals are replaced by WebSocket real-time updates
+            // Fallback intervals will be started automatically if WebSocket fails
         }
 
         // --- UI Rendering Functions ---
         function updateAllStatuses() {
-            apiClient.get('/api/status/all').then(statuses => {
-                const grid = document.getElementById('system-status-grid');
-                grid.innerHTML = '';
-                Object.entries(statuses).forEach(([name, data]) => {
-                    const isRunning = data.status === 'running';
-                    grid.innerHTML += `<div class="bg-slate-700/50 p-4 rounded-lg">
-                            <p class="text-sm text-slate-400">${name.replace(/_/g, ' ')}</p>
-                            <p class="text-lg font-bold flex items-center justify-center gap-2">${isRunning ? 'פעיל' : 'כבוי'} <span class="status-dot ${isRunning ? 'status-green' : 'status-red'}"></span></p>
-                            <div class="mt-2"><button class="btn btn-sm ${isRunning ? 'btn-danger' : 'btn-primary'}" onclick="toggleProcess('${name}', ${isRunning})">${isRunning ? 'עצור' : 'הפעל'}</button></div>
-                        </div>`;
+            // Try WebSocket first, fallback to API
+            if (isConnected && socket) {
+                socket.emit('request_update', { type: 'status' });
+            } else {
+                apiClient.get('/api/status/all').then(updateStatusDisplay).catch(err => {
+                    console.error("Failed to update status:", err);
                 });
+            }
+        }
+
+        function updateStatusDisplay(statuses) {
+            // Hebrew translations for process names
+            const processTranslations = {
+                'backtester': 'בקטסטר',
+                'data_collector': 'איסוף נתונים',
+                'main_trainer': 'אימון מודל',
+                'model_api': 'API מודל',
+                'preprocessor': 'עיבוד נתונים',
+                'feature_engineering': 'יצירת פיצ\'רים',
+                'run_all': 'הרץ הכל',
+                'trading_agent': 'סוכן מסחר'
+            };
+            
+            // Define the correct order for RTL - following the logical execution flow
+            const processOrder = [
+                'data_collector',      // איסוף נתונים - השלב הראשון
+                'preprocessor',        // עיבוד נתונים - עיבוד בסיסי
+                'feature_engineering', // יצירת פיצ'רים - עיבוד מתקדם
+                'main_trainer',        // אימון מודל - יצירת המודל
+                'backtester',          // בקטסטר - בדיקת האסטרטגיה
+                'model_api',           // API מודל - שירות המודל
+                'trading_agent',       // סוכן מסחר - המוצר הסופי
+                'run_all'              // הרץ הכל - מריץ הכל יחד
+            ];
+            
+            const grid = document.getElementById('system-status-grid');
+            if (!grid) return;
+            
+            grid.innerHTML = '';
+            
+            // Display statuses in the correct order
+            processOrder.forEach(name => {
+                // Create a default status for feature_engineering if it doesn't exist
+                if (name === 'feature_engineering' && !statuses[name]) {
+                    statuses[name] = { status: 'stopped' };
+                }
+                
+                if (statuses[name]) {
+                    const data = statuses[name];
+                    const isRunning = data.status === 'running';
+                        const displayName = processTranslations[name] || name.replace(/_/g, ' ');
+                        grid.innerHTML += `<div class="bg-slate-700/50 p-4 rounded-lg">
+                            <p class="text-sm text-slate-400">${displayName}</p>
+                            <p class="text-lg font-bold flex items-center justify-center gap-2">${isRunning ? 'פעיל' : 'כבוי'} <span class="status-dot ${isRunning ? 'status-green' : 'status-red'}"></span></p>
+                        </div>`;
+                    }
+                });
+                
                 lucide.createIcons();
-            }).catch(err => console.error("Failed to update statuses:", err));
         }
 
         function updateLivePosition() {
+            // Try WebSocket first, fallback to API
+            if (isConnected && socket) {
+                socket.emit('request_update', { type: 'position' });
+            } else {
+                apiClient.get('/api/agent/position').then(updatePositionDisplay).catch(err => {
+                    console.error("Failed to update position:", err);
+                });
+            }
+        }
+
+        function updatePositionDisplay(data) {
             const contentDiv = document.getElementById('live-position-content');
-            apiClient.get('/api/agent/position').then(data => {
+            const symbolEl = document.getElementById('position-symbol');
+            const directionEl = document.getElementById('position-direction');
+            const sizeEl = document.getElementById('position-size');
+            const timeEl = document.getElementById('position-time');
+            
+            if (!contentDiv) return;
+            
+            try {
+                // Update main content area
                 if (!data.position || data.position === 'none') {
-                    contentDiv.innerHTML = `<div class="bg-blue-500/10 text-blue-300 p-3 rounded-lg"><p class="font-bold text-lg">אין פוזיציה פעילה</p></div>`;
+                    contentDiv.innerHTML = `
+                        <div class="bg-blue-500/10 text-blue-300 p-6 rounded-lg text-center h-full w-full flex items-center justify-center">
+                            <div>
+                                <i data-lucide="circle-off" class="w-12 h-12 mx-auto mb-3 text-blue-300/50"></i>
+                                <p class="font-bold text-lg">אין פוזיציה פעילה</p>
+                                <p class="text-sm mt-2 text-blue-300/70">המערכת מחכה לאות כניסה...</p>
+                            </div>
+                        </div>`;
+                    
+                    // Reset the data grid
+                    symbolEl.textContent = "-";
+                    directionEl.textContent = "-";
+                    sizeEl.textContent = "-";
+                    timeEl.textContent = "-";
                 } else {
                     const pClass = data.position === 'long' ? 'bg-green-500/10 text-green-300' : 'bg-red-500/10 text-red-300';
-                    contentDiv.innerHTML = `<div class="${pClass} p-3 rounded-lg"><p class="font-bold text-lg">פוזיציית ${data.position === 'long' ? 'לונג' : 'שורט'} פעילה</p></div>
-                        <div class="grid grid-cols-2 gap-3 text-sm">
-                            <p><strong>גודל:</strong> ${data.size||'-'}</p><p><strong>כניסה:</strong> $${data.entryPrice||'-'}</p>
-                            <p><strong>SL:</strong> $${data.stopLoss||'-'}</p><p><strong>TP:</strong> $${data.takeProfit||'-'}</p>
+                    const positionType = data.position === 'long' ? 'לונג' : 'שורט';
+                    const positionIcon = data.position === 'long' ? 'trending-up' : 'trending-down';
+                    
+                    contentDiv.innerHTML = `
+                        <div class="${pClass} p-6 rounded-lg text-center h-full w-full flex items-center justify-center">
+                            <div>
+                                <i data-lucide="${positionIcon}" class="w-12 h-12 mx-auto mb-3"></i>
+                                <p class="font-bold text-xl">פוזיציית ${positionType} פעילה</p>
+                                <div class="grid grid-cols-2 gap-3 text-sm mt-3">
+                                    <p><strong>כניסה:</strong> $${data.entryPrice||'-'}</p>
+                                    <p><strong>SL:</strong> $${data.stopLoss||'-'}</p>
+                                    <p><strong>TP:</strong> $${data.takeProfit||'-'}</p>
+                                    <p><strong>רווח/הפסד:</strong> <span id="position-pnl">-</span></p>
+                                </div>
+                            </div>
                         </div>`;
+                        
+                    // Update the data grid
+                    symbolEl.textContent = data.symbol || "SPY";
+                    directionEl.textContent = positionType;
+                    directionEl.className = data.position === 'long' ? 'text-lg font-bold text-green-400' : 'text-lg font-bold text-red-400';
+                    sizeEl.textContent = data.size || "-";
+                    timeEl.textContent = data.entryTime ? new Date(data.entryTime).toLocaleTimeString('he-IL') : new Date().toLocaleTimeString('he-IL');
                 }
-            }).catch(err => contentDiv.innerHTML = `<p class="text-red-400">שגיאה בטעינת מצב הפוזיציה.</p>`);
+                
+                // Create icons after any DOM changes
+                lucide.createIcons();
+            } catch (err) {
+                contentDiv.innerHTML = `<p class="text-red-400 text-center">שגיאה בטעינת מצב הפוזיציה.</p>`;
+                
+                // Reset the data grid on error
+                symbolEl.textContent = "-";
+                directionEl.textContent = "-";
+                directionEl.className = 'text-lg font-bold';
+                sizeEl.textContent = "-";
+                timeEl.textContent = "-";
+            }
+        }
+        
+        function updateAPIStatus() {
+            // Try WebSocket first, fallback to API
+            if (isConnected && socket) {
+                socket.emit('request_update', { type: 'status' });
+                return;
+            }
+            
+            const statusDiv = document.getElementById('api-status');
+            if (!statusDiv) return;
+            
+            apiClient.get('/api/system/status').then(data => {
+                // Check if API server is running and model API is available
+                const apiRunning = data.managed_processes.model_api?.status === 'running';
+                const serverRunning = true; // We know the API server is running if we're here
+                
+                let html = '';
+                
+                if (serverRunning && apiRunning) {
+                    html = `
+                        <div class="bg-green-500/20 border border-green-500 p-4 rounded-lg">
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="font-semibold text-lg">API מערכת</span>
+                                <span class="status-dot status-green"></span>
+                            </div>
+                            <p class="text-sm mb-2">שרת API פעיל בהצלחה.</p>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <p>שרת ראשי:</p>
+                                    <p class="font-semibold text-green-400">פעיל</p>
+                                </div>
+                                <div>
+                                    <p>API מודל:</p>
+                                    <p class="font-semibold text-green-400">פעיל</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (serverRunning && !apiRunning) {
+                    html = `
+                        <div class="bg-yellow-600/20 border border-yellow-600 p-4 rounded-lg">
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="font-semibold text-lg">API מערכת</span>
+                                <span class="status-dot status-yellow"></span>
+                            </div>
+                            <p class="text-sm mb-2">שרת API פעיל חלקית.</p>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <p>שרת ראשי:</p>
+                                    <p class="font-semibold text-green-400">פעיל</p>
+                                </div>
+                                <div>
+                                    <p>API מודל:</p>
+                                    <p class="font-semibold text-red-400">לא פעיל</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    html = `
+                        <div class="bg-red-500/20 border border-red-500 p-4 rounded-lg">
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="font-semibold text-lg">API מערכת</span>
+                                <span class="status-dot status-red"></span>
+                            </div>
+                            <p class="text-sm mb-2">שרת API לא פעיל.</p>
+                            <div class="text-xs">
+                                <p>אחד או יותר משירותי ה-API לא מגיבים. יתכן כי יש צורך לאתחל את השירותים.</p>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                statusDiv.innerHTML = html;
+            }).catch(err => {
+                statusDiv.innerHTML = `
+                    <div class="bg-red-500/20 border border-red-500 p-4 rounded-lg">
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="font-semibold text-lg">API מערכת</span>
+                            <span class="status-dot status-red"></span>
+                        </div>
+                        <p class="text-sm mb-2">שגיאת תקשורת.</p>
+                        <div class="text-xs">
+                            <p>לא ניתן לתקשר עם שרת ה-API. יתכן שהתהליך אינו פעיל.</p>
+                            <p class="text-slate-500 mt-1">פרטי שגיאה: ${err.message || 'שגיאת תקשורת לא ידועה'}</p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        // Function removed - data health is now only shown on data management page
+        
+        function updateAgentStatus() {
+            const statusDiv = document.getElementById('agent-status');
+            if (!statusDiv) return;
+            
+            // Fetch agent state from the API
+            apiClient.get('/api/status/all').then(statuses => {
+                const agentRunning = statuses.trading_agent?.status === 'running';
+                
+                document.getElementById('agent-logic-status').innerHTML = 
+                    agentRunning ? '<span class="text-green-400">פעיל</span>' : '<span class="text-red-400">כבוי</span>';
+                
+                // Fetch agent command history
+                apiClient.get('/api/agent/command/history').catch((err) => {
+                    console.log('⚠️  לא ניתן לטעון היסטוריית פקודות:', err.message);
+                    return { commands: [] }; // Return empty commands array
+                }).then(history => {
+                    if (history && history.commands) {
+                        // Determine if new entries are paused
+                        const pauseCommand = history.commands.find(cmd => cmd.command === 'PAUSE_NEW_ENTRIES');
+                        const entriesStatus = pauseCommand && pauseCommand.pause_new_entries ? 
+                            '<span class="text-yellow-400">מושהה</span>' : 
+                            '<span class="text-green-400">מאופשר</span>';
+                        
+                        document.getElementById('agent-entries-status').innerHTML = entriesStatus;
+                        
+                        // Count trades
+                        const trades = history.commands.filter(cmd => 
+                            cmd.command === 'OPEN_LONG' || 
+                            cmd.command === 'OPEN_SHORT' ||
+                            cmd.command === 'CLOSE_POSITION'
+                        );
+                        document.getElementById('agent-trade-count').innerHTML = trades.length;
+                    } else {
+                        document.getElementById('agent-entries-status').innerHTML = '<span class="text-slate-400">אין מידע</span>';
+                        document.getElementById('agent-trade-count').innerHTML = '<span class="text-slate-400">0</span>';
+                    }
+                }).catch(() => {
+                    document.getElementById('agent-entries-status').innerHTML = '<span class="text-slate-400">אין מידע</span>';
+                    document.getElementById('agent-trade-count').innerHTML = '<span class="text-slate-400">0</span>';
+                });
+                
+            }).catch(() => {
+                document.getElementById('agent-logic-status').innerHTML = '<span class="text-red-400">שגיאת תקשורת</span>';
+                document.getElementById('agent-entries-status').innerHTML = '<span class="text-red-400">שגיאת תקשורת</span>';
+                document.getElementById('agent-trade-count').innerHTML = '<span class="text-red-400">שגיאת תקשורת</span>';
+            });
+        }
+        
+        function updateSystemInfo() {
+            console.log('updateSystemInfo called');
+            // Try WebSocket first, fallback to API
+            if (isConnected && socket) {
+                socket.emit('request_update', { type: 'system_info' });
+            } else {
+                apiClient.get('/api/system/info').then(data => {
+                    console.log('🔄 Manual refresh - system info:', data);
+                    updateSystemInfoDisplay(data);
+                }).catch(err => {
+                    console.error("Failed to update system info:", err);
+                });
+            }
+        }
+
+        function updateSystemInfoDisplay(info) {
+            console.log('updateSystemInfoDisplay called with:', info);
+            const infoDiv = document.getElementById('system-info');
+            if (!infoDiv) {
+                console.error('system-info div not found');
+                return;
+            }
+            
+            // Check if info is valid
+            if (!info || typeof info !== 'object') {
+                console.error('Invalid info object:', info);
+                return;
+            }
+            
+            // Check if required data exists
+            if (!info.memory || !info.disk || !info.cpu) {
+                console.error('Missing required data in info:', info);
+                return;
+            }
+            
+            try {
+                console.log('System info received:', info);
+                console.log('Memory object:', info.memory);
+                console.log('Disk object:', info.disk);
+                console.log('CPU object:', info.cpu);
+                
+                // CPU usage visualization
+                const cpuPercent = info.cpu.usage_percent;
+                const cpuBarColor = cpuPercent > 80 ? 'bg-red-500' : cpuPercent > 60 ? 'bg-yellow-500' : 'bg-green-500';
+                
+                // Update system information display with 5 cards
+                console.log('Updating system info display');
+                infoDiv.innerHTML = `
+                    <!-- מערכת הפעלה -->
+                    <div class="bg-slate-700/50 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold mb-2 flex items-center gap-1">
+                            <i data-lucide="monitor" class="w-3 h-3 text-blue-400"></i>מערכת הפעלה
+                        </h4>
+                        <p class="text-xs">${info.os.system} ${info.os.release}</p>
+                        <p class="text-xs text-slate-400">${info.os.version}</p>
+                    </div>
+                    
+                    <!-- מעבד -->
+                    <div class="bg-slate-700/50 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold mb-2 flex items-center gap-1">
+                            <i data-lucide="cpu" class="w-3 h-3 text-blue-400"></i>מעבד
+                        </h4>
+                        <p class="text-xs">${info.cpu.physical_cores} ליבות פיזיות / ${info.cpu.total_cores} ליבות לוגיות</p>
+                        <p class="text-xs text-slate-400">${info.os.processor}</p>
+                    </div>
+                    
+                    <!-- זיכרון -->
+                    <div class="bg-slate-700/50 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold mb-2 flex items-center gap-1">
+                            <i data-lucide="memory-stick" class="w-3 h-3 text-blue-400"></i>זיכרון
+                        </h4>
+                        <p class="text-xs">${Number(info.memory?.used_gb || 0).toFixed(2)} GB / ${Number(info.memory?.total_gb || 0).toFixed(2)} GB (${Number(info.memory?.percent || 0).toFixed(1)}%)</p>
+                        <div class="w-full bg-slate-600 h-2 rounded-full mt-1">
+                            <div class="bg-blue-500 h-2 rounded-full" style="width: ${info.memory?.percent || 0}%"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- דיסק -->
+                    <div class="bg-slate-700/50 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold mb-2 flex items-center gap-1">
+                            <i data-lucide="hard-drive" class="w-3 h-3 text-blue-400"></i>דיסק
+                        </h4>
+                        <p class="text-xs">${Number(info.disk?.used_gb || 0).toFixed(2)} GB / ${Number(info.disk?.total_gb || 0).toFixed(2)} GB (${Number(info.disk?.percent || 0).toFixed(1)}%)</p>
+                        <div class="w-full bg-slate-600 h-2 rounded-full mt-1">
+                            <div class="bg-blue-500 h-2 rounded-full" style="width: ${info.disk?.percent || 0}%"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- משאבי מערכת -->
+                    <div class="bg-slate-700/50 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold mb-2 flex items-center gap-1">
+                            <i data-lucide="activity" class="w-3 h-3 text-blue-400"></i>משאבי מערכת
+                        </h4>
+                        <div class="flex flex-col justify-center">
+                            <div class="flex justify-between items-center gap-2 mb-1">
+                                <span class="text-xs font-semibold">RAM:</span>
+                                <span class="text-xs">${Number(info.memory?.percent || 0).toFixed(1)}%</span>
+                            </div>
+                            <div class="w-full bg-slate-600 h-2 rounded-full mb-2">
+                                <div class="${info.memory.percent > 80 ? 'bg-red-500' : info.memory.percent > 60 ? 'bg-yellow-500' : 'bg-green-500'} h-2 rounded-full" style="width: ${info.memory.percent}%"></div>
+                            </div>
+                            <div class="flex justify-between items-center gap-2 mb-1">
+                                <span class="text-xs font-semibold">CPU:</span>
+                                <span class="text-xs">${Number(cpuPercent).toFixed(1)}%</span>
+                            </div>
+                            <div class="w-full bg-slate-600 h-2 rounded-full">
+                                <div class="${cpuBarColor} h-2 rounded-full" style="width: ${cpuPercent}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Update timestamp
+                const timestampEl = document.getElementById('system-info-timestamp');
+                if (timestampEl) {
+                    timestampEl.textContent = `עדכון אחרון: ${new Date().toLocaleTimeString('he-IL')}`;
+                }
+                
+                lucide.createIcons();
+                
+            } catch (err) {
+                console.error('Error updating system info display:', err);
+                infoDiv.innerHTML = `
+                    <div class="col-span-full bg-red-500/20 border border-red-500/50 p-4 rounded-lg">
+                        <p class="text-sm font-semibold mb-2">שגיאה בטעינת מידע מערכתי</p>
+                        <p class="text-xs">${err.message || 'לא ניתן לטעון מידע מערכתי'}</p>
+                    </div>
+                `;
+            }
         }
 
         function updateDataHealth() {
             const tableBody = document.getElementById('data-health-table');
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="p-4 text-center text-slate-400">
+                        <div class="flex items-center justify-center gap-2">
+                            <div class="spinner"></div>
+                            <span>טוען נתוני בריאות...</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            
             apiClient.get('/api/data_health').then(health => {
                 tableBody.innerHTML = '';
                 health.forEach(item => {
-                    tableBody.innerHTML += `<tr class="border-b border-slate-700"><td class="p-2">${item.file}</td><td class="p-2">${item.exists ? item.modified_date : 'לא קיים'}</td><td class="p-2">${item.exists ? item.size_mb : '-'}</td></tr>`;
+                    const rows = item.exists ? item.rows : '-';
+                    const startDate = item.exists ? (item.start_date || 'לא זמין') : '-';
+                    const endDate = item.exists ? (item.end_date || 'לא זמין') : '-';
+                    const modifiedDate = item.exists ? item.modified_date : 'לא קיים';
+                    
+                    // Color coding for status
+                    const statusClass = item.exists ? 'text-green-400' : 'text-red-400';
+                    const fileName = `<span class="${statusClass}">${item.file}</span>`;
+                    
+                    tableBody.innerHTML += `
+                        <tr class="border-b border-slate-700 hover:bg-slate-800/50">
+                            <td class="p-2 text-right">${fileName}</td>
+                            <td class="p-2 text-right text-sm">${modifiedDate}</td>
+                            <td class="p-2 text-right font-mono text-sm">${rows}</td>
+                            <td class="p-2 text-right text-sm">${startDate}</td>
+                            <td class="p-2 text-right text-sm">${endDate}</td>
+                        </tr>`;
                 });
+            }).catch(err => {
+                console.error('Error loading data health:', err);
+                const errorMsg = err.response?.data?.error || err.message || 'שגיאה לא ידועה';
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="p-4 text-center text-red-400">
+                            <div class="flex items-center justify-center gap-2">
+                                <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                                <span>שגיאה בטעינת נתוני בריאות: ${errorMsg}</span>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                lucide.createIcons();
+            });
+        }
+
+        function updateModelHealth() {
+            const tableBody = document.getElementById('model-health-table');
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="p-4 text-center text-slate-400">
+                        <div class="flex items-center justify-center gap-2">
+                            <div class="spinner"></div>
+                            <span>טוען מידע על מודלים...</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            
+            apiClient.get('/api/model_health').then(health => {
+                tableBody.innerHTML = '';
+                health.forEach(item => {
+                    const rows = item.exists ? item.rows : '-';
+                    const startDate = item.exists ? (item.start_date || 'לא זמין') : '-';
+                    const endDate = item.exists ? (item.end_date || 'לא זמין') : '-';
+                    const modifiedDate = item.exists ? item.modified_date : 'לא קיים';
+                    
+                    // Color coding for status
+                    const statusClass = item.exists ? 'text-green-400' : 'text-red-400';
+                    const fileName = `<span class="${statusClass}">${item.file}</span>`;
+                    
+                    tableBody.innerHTML += `
+                        <tr class="border-b border-slate-700 hover:bg-slate-800/50">
+                            <td class="p-2 text-right">${fileName}</td>
+                            <td class="p-2 text-right text-sm">${modifiedDate}</td>
+                            <td class="p-2 text-right font-mono text-sm">${rows}</td>
+                            <td class="p-2 text-right text-sm">${startDate}</td>
+                            <td class="p-2 text-right text-sm">${endDate}</td>
+                        </tr>`;
+                });
+            }).catch(err => {
+                console.error('Error loading model health:', err);
+                const errorMsg = err.response?.data?.error || err.message || 'שגיאה לא ידועה';
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="p-4 text-center text-red-400">
+                            <div class="flex items-center justify-center gap-2">
+                                <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                                <span>שגיאה בטעינת נתוני מודלים: ${errorMsg}</span>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                lucide.createIcons();
             });
         }
 
         function loadConfigForm() {
             const form = document.getElementById('config-form');
+            
+            // Hebrew translations for configuration sections
+            const sectionTranslations = {
+                'agent_settings': 'הגדרות סוכן',
+                'api_settings': 'הגדרות API',
+                'backtest_params': 'פרמטרי בקטסט',
+                'contract': 'חוזה',
+                'ibkr_settings': 'הגדרות IBKR',
+                'optuna_param_limits': 'מגבלות פרמטרי Optuna',
+                'risk_params': 'פרמטרי סיכון',
+                'system_paths': 'נתיבי מערכת',
+                'training_params': 'פרמטרי אימון'
+            };
+            
+            // Hebrew translations for parameter names
+            const paramTranslations = {
+                // Agent settings
+                'TEST_BUY_PRICE_FACTOR': 'גורם מחיר קנייה לבדיקה',
+                'TEST_BUY_QUANTITY': 'כמות קנייה לבדיקה',
+                'TEST_MODE_ENABLED': 'מצב בדיקה מופעל',
+                
+                // API settings
+                'host': 'שרת',
+                'port': 'פורט',
+                
+                // Backtest params
+                'commission': 'עמלה',
+                'initial_balance': 'יתרה ראשונית',
+                'min_history_days': 'מינימום ימי היסטוריה',
+                'slippage': 'החלקה',
+                
+                // Contract
+                'currency': 'מטבע',
+                'exchange': 'בורסה',
+                'primaryExch': 'בורסה ראשית',
+                'secType': 'סוג נייר ערך',
+                'symbol': 'סמל',
+                
+                // IBKR settings
+                'clientId': 'מזהה לקוח',
+                'history_window': 'חלון היסטוריה',
+                
+                // Optuna param limits
+                'horizon': 'אופק',
+                'learning_rate': 'קצב למידה',
+                'max_depth': 'עומק מקסימלי',
+                'n_estimators': 'מספר מעמידים',
+                'risk_per_trade': 'סיכון לכל עסקה',
+                'stop_loss_pct': 'אחוז הפסד עצירה',
+                'take_profit_pct': 'אחוז רווח',
+                'threshold': 'סף',
+                'top_n_features': 'מספר מאפיינים עליונים',
+                
+                // Risk params
+                'position_size_pct': 'אחוז גודל פוזיציה',
+                
+                // System paths
+                'champion_config': 'תצורת אלוף',
+                'champion_model': 'מודל אלוף',
+                'champion_scaler': 'מרחב אלוף',
+                'system_config': 'תצורת מערכת',
+                
+                // Training params
+                'cv_splits': 'חלוקות CV',
+                'n_startup_trials': 'ניסיונות התחלתיים',
+                'n_trials': 'מספר ניסיונות',
+                'optuna_target_metric': 'מטריקת יעד Optuna',
+                'test_size_split': 'חלוקת גודל בדיקה',
+                'years_of_data': 'שנות נתונים'
+            };
+            
             apiClient.get('/api/config').then(config => {
                 form.innerHTML = '';
                 Object.entries(config).forEach(([section, params]) => {
                     let fieldsHtml = '';
                     Object.entries(params).forEach(([key, value]) => {
-                        fieldsHtml += `<div><label for="config-${section}-${key}" class="block text-sm mb-1">${key}</label><input type="${typeof value === 'number' ? 'number' : 'text'}" id="config-${section}-${key}" data-section="${section}" data-key="${key}" value='${JSON.stringify(value)}' class="w-full bg-slate-600 p-2 rounded"></div>`;
+                        const displayName = paramTranslations[key] || key;
+                        fieldsHtml += `<div><label for="config-${section}-${key}" class="block text-sm mb-1">${displayName}</label><input type="${typeof value === 'number' ? 'number' : 'text'}" id="config-${section}-${key}" data-section="${section}" data-key="${key}" value='${JSON.stringify(value)}' class="w-full bg-slate-600 p-2 rounded"></div>`;
                     });
-                    form.innerHTML += `<details class="mb-4" open><summary class="text-lg font-semibold cursor-pointer">${section}</summary><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-slate-700/50 rounded-lg">${fieldsHtml}</div></details>`;
+                    const sectionTitle = sectionTranslations[section] || section;
+                    form.innerHTML += `<details class="mb-4" open><summary class="text-lg font-semibold cursor-pointer">${sectionTitle}</summary><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-slate-700/50 rounded-lg">${fieldsHtml}</div></details>`;
                 });
                 form.innerHTML += `<div class="mt-6 text-right"><button type="submit" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i>שמור שינויים</button></div>`;
                 lucide.createIcons();
@@ -434,15 +2145,89 @@
         }
 
         function loadTrainingSummaries() {
-            const listDiv = document.getElementById('training-summary-list');
-            listDiv.innerHTML = '<p>טוען סיכומים...</p>';
+            const listDiv = document.getElementById('training-summary-list-new');
+            listDiv.innerHTML = '<p class="text-slate-400">טוען סיכומים...</p>';
             apiClient.get('/api/analysis/training_summaries').then(summaries => {
-                listDiv.innerHTML = !summaries || summaries.length === 0 ? '<p>לא נמצאו סיכומי אימון.</p>' : '';
+                if (!summaries || summaries.length === 0) {
+                    listDiv.innerHTML = '<p class="text-slate-400">לא נמצאו סיכומי אימון.</p>';
+                    return;
+                }
+                
+                listDiv.innerHTML = '';
                 summaries.forEach(run => {
-                    const accuracy = run.test_accuracy ? `${(run.test_accuracy * 100).toFixed(2)}%` : 'N/A';
-                    listDiv.innerHTML += `<details class="bg-slate-700/50 p-4 rounded-lg"><summary class="font-semibold cursor-pointer">ריצה: ${new Date(run.timestamp).toLocaleString('he-IL')} | דיוק: ${accuracy}</summary><div class="mt-4 pt-4 border-t border-slate-600"><div class="flex flex-wrap gap-4 items-center"><button class="btn btn-primary btn-sm" onclick="runBacktest('${run.file_ts}')"><i data-lucide="bar-chart" class="w-4 h-4"></i>בקטסט</button></div><pre class="text-xs whitespace-pre-wrap mt-4">${JSON.stringify(run, null, 2)}</pre></div></details>`;
+                    const accuracy = run.test_accuracy ? `${(run.test_accuracy * 100).toFixed(2)}%` : 'לא זמין';
+                    const f1Score = run.test_f1_score ? `${(run.test_f1_score * 100).toFixed(2)}%` : 'לא זמין';
+                    const auc = run.test_auc ? `${(run.test_auc * 100).toFixed(2)}%` : 'לא זמין';
+                    const timestamp = new Date(run.timestamp).toLocaleString('he-IL');
+                    
+                    const performanceMetrics = `
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div class="bg-slate-800/50 p-3 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">דיוק</p>
+                                <p class="text-lg font-bold text-green-400">${accuracy}</p>
+                            </div>
+                            <div class="bg-slate-800/50 p-3 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">F1 Score</p>
+                                <p class="text-lg font-bold text-blue-400">${f1Score}</p>
+                            </div>
+                            <div class="bg-slate-800/50 p-3 rounded-lg text-center">
+                                <p class="text-sm text-slate-400">AUC</p>
+                                <p class="text-lg font-bold text-purple-400">${auc}</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    const detailsHTML = `
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p><strong>פרמטרים:</strong></p>
+                                <p class="text-slate-300">מודל: ${run.model_type || 'לא זמין'}</p>
+                                <p class="text-slate-300">פיצ'רים: ${run.n_features || 'לא זמין'}</p>
+                                <p class="text-slate-300">אימון: ${run.train_samples || 'לא זמין'} דגימות</p>
+                                <p class="text-slate-300">בדיקה: ${run.test_samples || 'לא זמין'} דגימות</p>
+                            </div>
+                            <div>
+                                <p><strong>תוצאות נוספות:</strong></p>
+                                <p class="text-slate-300">דיוק אימון: ${run.train_accuracy ? `${(run.train_accuracy * 100).toFixed(2)}%` : 'לא זמין'}</p>
+                                <p class="text-slate-300">זמן אימון: ${run.training_time || 'לא זמין'}</p>
+                                <p class="text-slate-300">קובץ מודל: ${run.model_file || 'לא זמין'}</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    listDiv.innerHTML += `
+                        <div class="bg-slate-700/50 border border-slate-600 rounded-lg p-4 mb-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-semibold text-lg flex items-center gap-2">
+                                    <i data-lucide="brain" class="w-5 h-5 text-blue-400"></i>
+                                    אימון מ-${timestamp}
+                                </h4>
+                                <div class="flex gap-2">
+                                    <button class="btn btn-primary btn-sm" onclick="runBacktest('${run.file_ts}')">
+                                        <i data-lucide="bar-chart" class="w-4 h-4"></i>בקטסט
+                                    </button>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteModel('${run.file_ts}')">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>מחיקה
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            ${performanceMetrics}
+                            
+                            <details class="mt-4">
+                                <summary class="cursor-pointer text-sm text-blue-400 hover:text-blue-300">
+                                    <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>פרטים נוספים
+                                </summary>
+                                <div class="mt-3 pt-3 border-t border-slate-600">
+                                    ${detailsHTML}
+                                </div>
+                            </details>
+                        </div>
+                    `;
                 });
                 lucide.createIcons();
+            }).catch(err => {
+                listDiv.innerHTML = '<p class="text-red-400">שגיאה בטעינת סיכומי אימון</p>';
             });
         }
         
@@ -450,7 +2235,7 @@
             const container = document.getElementById('backtest-analysis-content');
             apiClient.get('/api/analysis/backtests').then(files => {
                 const selectOptions = files.map(f => `<option value="${f}">${f}</option>`).join('');
-                container.innerHTML = `<h3 class="text-xl font-semibold mb-4">ניתוח Backtest</h3>
+                container.innerHTML = `<h3 class="text-xl font-semibold mb-4">ניתוח בקטסט</h3>
                     <select id="backtest-selector" class="bg-slate-700 border border-slate-600 rounded-lg p-2 mb-4 w-full md:w-1/3">${selectOptions}</select>
                     <div id="backtest-metrics" class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center mb-6"></div>
                     <div><canvas id="equity-curve-chart"></canvas></div>`;
@@ -477,7 +2262,7 @@
                 const summary = result;
                 const metricsToShow = { "תשואה": "total_return", "שארפ": "sharpe_ratio", "ירידה מירבית": "max_drawdown", "אחוז הצלחה": "win_rate" };
                 Object.entries(metricsToShow).forEach(([name, key]) => {
-                    const val = summary[key] ? `${(summary[key] * 100).toFixed(2)}%` : 'N/A';
+                    const val = summary[key] ? `${(summary[key] * 100).toFixed(2)}%` : 'לא זמין';
                     metricsDiv.innerHTML += `<div class="bg-slate-700/50 p-4 rounded-lg"><p class="text-sm text-slate-400">${name}</p><p class="text-2xl font-bold">${val}</p></div>`;
                 });
                 // Here you would also fetch the equity curve data and update the chart
@@ -488,7 +2273,7 @@
             const contentDiv = document.getElementById('staging-content');
             contentDiv.innerHTML = '<p>טוען מידע...</p>';
             Promise.all([
-                apiClient.get('/api/analysis/backtests/summary_champion.json').catch(() => ({ error: 'Champion not found' })),
+                apiClient.get('/api/analysis/backtests/summary_champion.json').catch(() => ({ error: 'אלוף לא נמצא' })),
                 apiClient.get('/api/analysis/training_summaries').then(s => s.length > 0 ? s[0] : null)
             ]).then(([championResult, latestCandidate]) => {
                 if (!latestCandidate) {
@@ -496,7 +2281,7 @@
                     return;
                 }
                 const candidateTs = latestCandidate.file_ts;
-                apiClient.get(`/api/analysis/backtests/summary_candidate_${candidateTs}.json`).catch(() => ({ error: 'Candidate not found' }))
+                apiClient.get(`/api/analysis/backtests/summary_candidate_${candidateTs}.json`).catch(() => ({ error: 'מועמד לא נמצא' }))
                     .then(candidateResult => {
                         const championSummary = championResult.error ? null : championResult;
                         const candidateSummary = candidateResult.error ? null : candidateResult;
@@ -510,21 +2295,203 @@
             const hebrew = { "total_return": "תשואה", "sharpe_ratio": "שארפ", "max_drawdown": "ירידה מירבית", "win_rate": "אחוז הצלחה" };
             let tableRows = '';
             metrics.forEach(m => {
-                const champVal = champ && champ[m] ? `${(champ[m] * 100).toFixed(2)}%` : 'N/A';
-                const candVal = cand && cand[m] ? `${(cand[m] * 100).toFixed(2)}%` : 'N/A';
+                const champVal = champ && champ[m] ? `${(champ[m] * 100).toFixed(2)}%` : 'לא זמין';
+                const candVal = cand && cand[m] ? `${(cand[m] * 100).toFixed(2)}%` : 'לא זמין';
                 tableRows += `<tr class="border-b border-slate-700"><td class="p-2 text-right">${hebrew[m]}</td><td>${champVal}</td><td>${candVal}</td></tr>`;
             });
             container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="text-center p-4 bg-slate-700/50 rounded-lg"><h4 class="text-lg font-bold">מודל אלוף</h4><p class="text-sm text-slate-400">${champ ? 'קיים' : 'לא קיים'}</p></div><div class="text-center p-4 bg-slate-700/50 rounded-lg"><h4 class="text-lg font-bold">מודל מועמד</h4><p class="text-sm text-slate-400">${candTs}</p></div></div><div class="mt-6"><h4 class="font-semibold mb-2">השוואת ביצועים</h4><table class="w-full text-center"><thead class="border-b border-slate-600"><tr><th class="p-2 text-right">מדד</th><th>אלוף</th><th>מועמד</th></tr></thead><tbody>${tableRows}</tbody></table></div><div class="mt-6 text-center"><button class="btn btn-primary text-lg py-3 px-6" onclick="promoteModel('${candTs}')"><i data-lucide="rocket" class="w-5 h-5"></i>קדם לאלוף</button></div>`;
             lucide.createIcons();
         }
 
+        // --- Command History ---
+        function loadCommandHistory() {
+            const historyDiv = document.getElementById('command-history');
+            // We'll fetch the command file and previous commands from the API
+            // This is a placeholder - you'll need to add this endpoint to the API
+            apiClient.get('/api/agent/command/history').catch(() => {
+                // If endpoint doesn't exist yet, show placeholder
+                historyDiv.innerHTML = `
+                    <div class="text-center p-4 text-slate-400">
+                        <p>היסטוריית פקודות תוצג כאן.</p>
+                        <p class="text-xs mt-2">הערה למפתח: נדרש להוסיף נקודת קצה חדשה ב-API</p>
+                    </div>
+                `;
+            });
+        }
+        
+        // --- Data Reset Function ---
+        window.resetAllData = () => {
+            if (confirm('האם אתה בטוח שברצונך למחוק את כל הנתונים ולהתחיל מחדש?')) {
+                // This is a placeholder - you'll need to add this endpoint to the API
+                apiClient.post('/api/data/reset', {}).then(res => {
+                    showToast('הנתונים נמחקו בהצלחה, מתחיל איסוף מחדש...', 'success');
+                    startProcess('run_all');
+                }).catch(() => {
+                    showToast('נדרש להוסיף נקודת קצה לאיפוס נתונים ב-API', 'error');
+                });
+            }
+        };
+
+        // --- Process Management Functions ---
+        function showProcessStatus(processName, status, message = '') {
+            const statusElements = document.querySelectorAll(`[data-process="${processName}"]`);
+            statusElements.forEach(element => {
+                element.className = `process-status ${status}`;
+                const statusText = element.querySelector('.status-text');
+                const spinner = element.querySelector('.spinner');
+                const progressBar = element.querySelector('.progress-bar');
+                
+                if (status === 'running') {
+                    if (statusText) statusText.textContent = message || 'פועל...';
+                    if (spinner) spinner.style.display = 'block';
+                    if (progressBar) {
+                        progressBar.style.display = 'block';
+                        progressBar.innerHTML = '<div class="progress-indeterminate"></div>';
+                    }
+                } else if (status === 'error') {
+                    if (statusText) statusText.textContent = message || 'שגיאה';
+                    if (spinner) spinner.style.display = 'none';
+                    if (progressBar) progressBar.style.display = 'none';
+                } else if (status === 'success') {
+                    if (statusText) statusText.textContent = message || 'הושלם בהצלחה';
+                    if (spinner) spinner.style.display = 'none';
+                    if (progressBar) progressBar.style.display = 'none';
+                } else {
+                    if (statusText) statusText.textContent = message || 'כבוי';
+                    if (spinner) spinner.style.display = 'none';
+                    if (progressBar) progressBar.style.display = 'none';
+                }
+            });
+        }
+        
+        function updateButtonState(processName, isRunning) {
+            const buttons = document.querySelectorAll(`[onclick*="${processName}"]`);
+            buttons.forEach(button => {
+                if (isRunning) {
+                    button.disabled = true;
+                    const originalText = button.innerHTML;
+                    button.innerHTML = '<div class="spinner"></div> פועל...';
+                    button.dataset.originalText = originalText;
+                } else {
+                    button.disabled = false;
+                    if (button.dataset.originalText) {
+                        button.innerHTML = button.dataset.originalText;
+                    }
+                }
+            });
+        }
+
         // --- Global Action Functions ---
-        window.toggleProcess = (name, isRunning) => apiClient.post(isRunning ? `/api/processes/stop/${name}` : `/api/processes/start/${name}`, {}).then(res => { showToast(res.message); updateAllStatuses(); });
-        window.startProcess = (name) => apiClient.post(`/api/processes/start/${name}`, {}).then(res => { showToast(res.message); setTimeout(updateAllStatuses, 1000); });
-        window.sendAgentCommand = (body) => apiClient.post('/api/agent/command', body).then(res => showToast(res.message));
+        window.toggleProcess = (name, isRunning) => {
+            const action = isRunning ? 'עוצר' : 'מתחיל';
+            showProcessStatus(name, 'running', `${action} תהליך...`);
+            updateButtonState(name, true);
+            
+            return apiClient.post(isRunning ? `/api/processes/stop/${name}` : `/api/processes/start/${name}`, {})
+                .then(res => { 
+                    showToast(res.message, 'success'); 
+                    showProcessStatus(name, 'success', res.message);
+                    updateAllStatuses(); 
+                })
+                .catch(err => {
+                    const errorMsg = err.response?.data?.error || err.message || 'שגיאה לא ידועה';
+                    showToast(`שגיאה: ${errorMsg}`, 'error');
+                    showProcessStatus(name, 'error', `שגיאה: ${errorMsg}`);
+                })
+                .finally(() => {
+                    setTimeout(() => {
+                        updateButtonState(name, false);
+                    }, 2000);
+                });
+        };
+        
+        window.stopProcess = (name) => {
+            showProcessStatus(name, 'stopping', 'עוצר תהליך...');
+            updateButtonState(name, true);
+            
+            return apiClient.post(`/api/processes/stop/${name}`, {})
+                .then(res => { 
+                    showToast(res.message, 'success'); 
+                    showProcessStatus(name, 'success', res.message);
+                    setTimeout(updateAllStatuses, 1000); 
+                })
+                .catch(err => {
+                    const errorMsg = err.response?.data?.error || err.message || 'שגיאה לא ידועה';
+                    showToast(`שגיאה: ${errorMsg}`, 'error');
+                    showProcessStatus(name, 'error', `שגיאה: ${errorMsg}`);
+                })
+                .finally(() => {
+                    setTimeout(() => {
+                        updateButtonState(name, false);
+                    }, 2000);
+                });
+        };
+        
+        window.startProcess = (name) => {
+            showProcessStatus(name, 'running', 'מתחיל תהליך...');
+            updateButtonState(name, true);
+            
+            return apiClient.post(`/api/processes/start/${name}`, {})
+                .then(res => { 
+                    showToast(res.message, 'success'); 
+                    showProcessStatus(name, 'success', res.message);
+                    setTimeout(updateAllStatuses, 1000); 
+                })
+                .catch(err => {
+                    const errorMsg = err.response?.data?.error || err.message || 'שגיאה לא ידועה';
+                    showToast(`שגיאה: ${errorMsg}`, 'error');
+                    showProcessStatus(name, 'error', `שגיאה: ${errorMsg}`);
+                })
+                .finally(() => {
+                    setTimeout(() => {
+                        updateButtonState(name, false);
+                    }, 2000);
+                });
+        };
+        window.sendAgentCommand = (body) => {
+            apiClient.post('/api/agent/command', body).then(res => {
+                showToast(res.message, 'success');
+                // If we're on the command page, update the history
+                if (document.getElementById('page-command').classList.contains('active')) {
+                    setTimeout(loadCommandHistory, 1000);
+                }
+                // Update position if command affects it
+                if (body.command === 'CLOSE_ALL') {
+                    setTimeout(updateLivePosition, 1000);
+                }
+            }).catch(err => {
+                const errorMsg = err.response?.data?.error || err.message || 'שגיאה בפקודת סוכן';
+                showToast(`שגיאה: ${errorMsg}`, 'error');
+            });
+        };
         window.togglePause = (isPaused) => sendAgentCommand({ command: 'PAUSE_NEW_ENTRIES', pause_new_entries: isPaused });
         window.runBacktest = (ts) => { showToast(`מתחיל בקטסט עבור ${ts}...`); startProcess('backtester'); }; // Simplified
-        window.promoteModel = (ts) => { if (confirm(`האם אתה בטוח שברצונך לקדם את מודל ${ts} לאלוף?`)) { apiClient.post(`/api/analysis/promote/${ts}`, {}).then(res => { showToast(res.message); loadStagingInfo(); }); }};
+        window.promoteModel = (ts) => { 
+            if (confirm(`האם אתה בטוח שברצונך לקדם את מודל ${ts} לאלוף?`)) { 
+                apiClient.post(`/api/analysis/promote/${ts}`, {})
+                    .then(res => { 
+                        showToast(res.message, 'success'); 
+                        loadStagingInfo(); 
+                    })
+                    .catch(err => {
+                        const errorMsg = err.response?.data?.error || err.message || 'שגיאה בקידום המודל';
+                        showToast(`שגיאה: ${errorMsg}`, 'error');
+                    });
+            }
+        };
+        window.deleteModel = (ts) => { 
+            if (confirm(`האם אתה בטוח שברצונך למחוק את המודל ${ts}? פעולה זו לא ניתנת לביטול!`)) { 
+                apiClient.delete(`/api/models/${ts}`)
+                    .then(res => { 
+                        showToast(res.message, 'success'); 
+                        loadTrainingSummaries(); 
+                    })
+                    .catch(err => {
+                        const errorMsg = err.response?.data?.error || err.message || 'שגיאה במחיקת המודל';
+                        showToast(`שגיאה: ${errorMsg}`, 'error');
+                    });
+            }
+        };
         
         // --- Log Management Functions ---
         function loadLogsList() {
@@ -610,6 +2577,517 @@
                 container.innerHTML = `<p class="text-red-400">שגיאה בטעינת נתוני Optuna: ${err.message}</p>`;
             });
         }
+
+        // Feature Engineering Functions
+        function startFeatureCategory(category) {
+            const button = event.target;
+            const originalContent = button.innerHTML;
+            
+            button.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i>מעבד...';
+            button.disabled = true;
+            
+            const processMap = {
+                'technical': 'feature_engineering_technical',
+                'candlestick': 'feature_engineering_candlestick',
+                'volume': 'feature_engineering_volume',
+                'statistical': 'feature_engineering_statistical'
+            };
+            
+            startProcess(processMap[category]).then(() => {
+                button.innerHTML = originalContent;
+                button.disabled = false;
+                loadFeatureInfo();
+            }).catch(err => {
+                button.innerHTML = originalContent;
+                button.disabled = false;
+                alert('שגיאה בעיבוד הפיצ\'רים: ' + err.message);
+            });
+        }
+
+        function loadFeatureInfo() {
+            apiClient.get('/api/features/info').then(data => {
+                document.getElementById('total-features').textContent = data.total_features || '-';
+                document.getElementById('new-features').textContent = data.new_features || '-';
+                document.getElementById('last-processing-time').textContent = data.last_processing_time || '-';
+            }).catch(err => {
+                console.error('Error loading feature info:', err);
+            });
+        }
+
+        // Training Functions
+        function startTrainingMode(mode) {
+            const button = event.target;
+            const originalContent = button.innerHTML;
+            
+            button.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i>מתחיל...';
+            button.disabled = true;
+            
+            const processMap = {
+                'quick': 'training_quick',
+                'deep': 'training_deep',
+                'hyperopt': 'training_hyperopt'
+            };
+            
+            updateTrainingStatus('מתחיל אימון...');
+            startProcess(processMap[mode]).then(() => {
+                button.innerHTML = originalContent;
+                button.disabled = false;
+                loadTrainingResults();
+            }).catch(err => {
+                button.innerHTML = originalContent;
+                button.disabled = false;
+                updateTrainingStatus('שגיאה');
+                alert('שגיאה באימון: ' + err.message);
+            });
+        }
+
+        function updateTrainingStatus(status) {
+            document.getElementById('current-training-status').textContent = status;
+        }
+
+        function updateTrainingProgress(percent) {
+            document.getElementById('training-progress').style.width = percent + '%';
+            document.getElementById('training-progress-text').textContent = percent + '%';
+        }
+
+        function loadTrainingResults() {
+            apiClient.get('/api/training/results').then(data => {
+                document.getElementById('training-accuracy').textContent = data.accuracy || '-';
+                document.getElementById('training-f1').textContent = data.f1_score || '-';
+                document.getElementById('training-auc').textContent = data.auc || '-';
+                document.getElementById('last-training-time').textContent = data.last_training_time || '-';
+            }).catch(err => {
+                console.error('Error loading training results:', err);
+            });
+        }
+
+        // Tab functionality for new pages
+        function initializeTabs() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const tabName = button.dataset.tab;
+                    
+                    // Remove active class from all tabs
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    
+                    // Add active class to clicked tab
+                    button.classList.add('active');
+                    document.getElementById(`tab-${tabName}`).classList.add('active');
+                });
+            });
+        }
+
+        // Configuration section toggle functionality
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            const chevron = document.getElementById(`chevron-${sectionId}`);
+            
+            if (section.style.display === 'none' || section.style.display === '') {
+                section.style.display = 'block';
+                chevron.setAttribute('data-lucide', 'chevron-up');
+            } else {
+                section.style.display = 'none';
+                chevron.setAttribute('data-lucide', 'chevron-down');
+            }
+            
+            // Re-render lucide icons
+            lucide.createIcons();
+        }
+
+        // Backtest Functions
+        function runQuickBacktest() {
+            const period = document.getElementById('backtest-period').value;
+            const balance = document.getElementById('backtest-balance').value;
+            
+            updateBacktestStatus('מריץ בקטסט מהיר...');
+            
+            // Here you would normally call the API with the parameters
+            startProcess('backtester').then(() => {
+                loadBacktestResults();
+            }).catch(err => {
+                updateBacktestStatus('שגיאה');
+                alert('שגיאה בהרצת בקטסט: ' + err.message);
+            });
+        }
+
+        function updateBacktestStatus(status) {
+            document.getElementById('current-backtest-status').textContent = status;
+        }
+
+        function updateBacktestProgress(percent) {
+            document.getElementById('backtest-progress').style.width = percent + '%';
+            document.getElementById('backtest-progress-text').textContent = percent + '%';
+        }
+
+        function loadBacktestResults() {
+            apiClient.get('/api/backtest/results').then(data => {
+                document.getElementById('backtest-total-return').textContent = data.total_return || '-';
+                document.getElementById('backtest-sharpe').textContent = data.sharpe_ratio || '-';
+                document.getElementById('backtest-max-drawdown').textContent = data.max_drawdown || '-';
+                document.getElementById('backtest-win-rate').textContent = data.win_rate || '-';
+                document.getElementById('last-backtest-time').textContent = data.last_backtest_time || '-';
+            }).catch(err => {
+                console.error('Error loading backtest results:', err);
+            });
+        }
+
+        // Trading Agent Functions
+        function restartAgent() {
+            stopProcess('trading_agent').then(() => {
+                setTimeout(() => {
+                    startProcess('trading_agent');
+                }, 2000);
+            });
+        }
+
+        function updateAgentStatus(status) {
+            document.getElementById('current-agent-status').textContent = status;
+        }
+
+        function loadAgentStatus() {
+            apiClient.get('/api/agent/status').then(data => {
+                document.getElementById('agent-test-mode').textContent = data.test_mode ? 'פעיל' : 'כבוי';
+                document.getElementById('agent-ibkr-connection').textContent = data.ibkr_connected ? 'מחובר' : 'לא מחובר';
+                document.getElementById('agent-active-model').textContent = data.active_model || 'לא טעון';
+                document.getElementById('agent-last-action').textContent = data.last_action || '-';
+                document.getElementById('agent-uptime').textContent = data.uptime || '-';
+                
+                // Update positions
+                document.getElementById('agent-open-positions').textContent = data.open_positions || 0;
+                document.getElementById('agent-daily-pnl').textContent = data.daily_pnl || '$0.00';
+                document.getElementById('agent-total-pnl').textContent = data.total_pnl || '$0.00';
+                
+                // Update status
+                updateAgentStatus(data.status || 'כבוי');
+            }).catch(err => {
+                console.error('Error loading agent status:', err);
+            });
+        }
+
+        function loadAgentPositions() {
+            apiClient.get('/api/agent/positions').then(data => {
+                const table = document.getElementById('agent-positions-table');
+                if (data.positions && data.positions.length > 0) {
+                    table.innerHTML = `
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-700">
+                                    <th class="text-right p-2">סימבול</th>
+                                    <th class="text-right p-2">כמות</th>
+                                    <th class="text-right p-2">מחיר כניסה</th>
+                                    <th class="text-right p-2">מחיר נוכחי</th>
+                                    <th class="text-right p-2">רווח/הפסד</th>
+                                    <th class="text-right p-2">סוג</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.positions.map(pos => `
+                                    <tr class="border-b border-slate-700">
+                                        <td class="p-2 font-bold">${pos.symbol}</td>
+                                        <td class="p-2">${pos.quantity}</td>
+                                        <td class="p-2">$${pos.entry_price}</td>
+                                        <td class="p-2">$${pos.current_price}</td>
+                                        <td class="p-2 ${pos.pnl >= 0 ? 'text-green-400' : 'text-red-400'}">$${pos.pnl}</td>
+                                        <td class="p-2">${pos.type}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                } else {
+                    table.innerHTML = '<p class="text-slate-400 text-center">אין פוזיציות פתוחות</p>';
+                }
+            }).catch(err => {
+                console.error('Error loading agent positions:', err);
+            });
+        }
+
+        function loadAgentOrders() {
+            apiClient.get('/api/agent/orders').then(data => {
+                const table = document.getElementById('agent-orders-table');
+                if (data.orders && data.orders.length > 0) {
+                    table.innerHTML = `
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-700">
+                                    <th class="text-right p-2">זמן</th>
+                                    <th class="text-right p-2">סימבול</th>
+                                    <th class="text-right p-2">סוג</th>
+                                    <th class="text-right p-2">כמות</th>
+                                    <th class="text-right p-2">מחיר</th>
+                                    <th class="text-right p-2">סטטוס</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.orders.map(order => `
+                                    <tr class="border-b border-slate-700">
+                                        <td class="p-2">${order.time}</td>
+                                        <td class="p-2 font-bold">${order.symbol}</td>
+                                        <td class="p-2">${order.type}</td>
+                                        <td class="p-2">${order.quantity}</td>
+                                        <td class="p-2">$${order.price}</td>
+                                        <td class="p-2 ${order.status === 'Filled' ? 'text-green-400' : 'text-yellow-400'}">${order.status}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                } else {
+                    table.innerHTML = '<p class="text-slate-400 text-center">אין פקודות</p>';
+                }
+            }).catch(err => {
+                console.error('Error loading agent orders:', err);
+            });
+        }
+
+        function loadAgentLogs() {
+            apiClient.get('/api/agent/logs').then(data => {
+                const container = document.getElementById('agent-logs-content');
+                if (data.logs && data.logs.length > 0) {
+                    container.innerHTML = data.logs.map(log => `
+                        <div class="mb-2 p-2 bg-slate-700/50 rounded">
+                            <span class="text-slate-400 text-xs">${log.timestamp}</span>
+                            <span class="text-sm ml-2">${log.message}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p class="text-slate-400">אין לוגים זמינים</p>';
+                }
+            }).catch(err => {
+                console.error('Error loading agent logs:', err);
+            });
+        }
+
+        function loadConfigForm() {
+            const form = document.getElementById('config-form');
+            
+            // Load current configuration
+            apiClient.get('/api/config').then(config => {
+                // Training parameters
+                setFormValue('n_trials', config.training_params?.n_trials || 100);
+                setFormValue('cv_splits', config.training_params?.cv_splits || 5);
+                setFormValue('test_size_split', config.training_params?.test_size_split || 20);
+                setFormValue('n_startup_trials', config.training_params?.n_startup_trials || 10);
+                setFormValue('years_of_data', config.training_params?.years_of_data || 15);
+                setFormValue('optuna_target_metric', config.training_params?.optuna_target_metric || 'multi_objective');
+                
+                // Backtest parameters
+                setFormValue('initial_balance', config.backtest_params?.initial_balance || 100000);
+                setFormValue('commission', config.backtest_params?.commission || 0.001);
+                setFormValue('slippage', config.backtest_params?.slippage || 0.0005);
+                setFormValue('min_history_days', config.backtest_params?.min_history_days || 100);
+                setFormValue('position_size_pct', config.risk_params?.position_size_pct || 0.1);
+                
+                // Contract settings
+                setFormValue('symbol', config.contract?.symbol || 'SPY');
+                setFormValue('secType', config.contract?.secType || 'STK');
+                setFormValue('exchange', config.contract?.exchange || 'SMART');
+                setFormValue('currency', config.contract?.currency || 'USD');
+                setFormValue('primaryExch', config.contract?.primaryExch || 'ARCA');
+                
+                // Connection settings
+                setFormValue('api_host', config.api_settings?.host || '0.0.0.0');
+                setFormValue('api_port', config.api_settings?.port || 5000);
+                setFormValue('ibkr_host', config.ibkr_settings?.host || '127.0.0.1');
+                setFormValue('ibkr_port', config.ibkr_settings?.port || 4001);
+                setFormValue('clientId', config.ibkr_settings?.clientId || 101);
+                setFormValue('history_window', config.ibkr_settings?.history_window || '90 D');
+                
+                // Agent settings
+                setFormValue('TEST_MODE_ENABLED', config.agent_settings?.TEST_MODE_ENABLED || true, 'checkbox');
+                setFormValue('TEST_BUY_QUANTITY', config.agent_settings?.TEST_BUY_QUANTITY || 1);
+                setFormValue('TEST_BUY_PRICE_FACTOR', config.agent_settings?.TEST_BUY_PRICE_FACTOR || 0.95);
+                
+                // Load Optuna parameters
+                loadOptunaParams(config.optuna_param_limits || {});
+                
+            }).catch(err => {
+                console.error('Error loading configuration:', err);
+                showToast('שגיאה בטעינת התצורה', 'error');
+            });
+        }
+
+        function setFormValue(id, value, type = 'input') {
+            const element = document.getElementById(id);
+            if (element) {
+                if (type === 'checkbox') {
+                    element.checked = value;
+                } else {
+                    element.value = value;
+                }
+            }
+        }
+
+        function loadOptunaParams(params) {
+            const container = document.getElementById('optuna-params');
+            container.innerHTML = '';
+            
+            const paramLabels = {
+                'horizon': 'אופק (ימים)',
+                'threshold': 'סף (%)',
+                'top_n_features': 'פיצ\'רים',
+                'stop_loss_pct': 'הפסד (%)',
+                'take_profit_pct': 'רווח (%)',
+                'risk_per_trade': 'סיכון (%)',
+                'learning_rate': 'למידה',
+                'n_estimators': 'עצים',
+                'max_depth': 'עומק'
+            };
+            
+            Object.entries(params).forEach(([param, limits]) => {
+                if (!paramLabels[param]) return;
+                
+                const paramDiv = document.createElement('div');
+                paramDiv.className = 'border border-slate-600 rounded-lg p-4';
+                paramDiv.innerHTML = `
+                    <h4 class="font-semibold mb-3">${paramLabels[param]}</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">מינימום</label>
+                            <input type="number" id="min_${param}" name="min_${param}" 
+                                   class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" 
+                                   step="0.0001" value="${limits.min || 0}">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">מקסימום</label>
+                            <input type="number" id="max_${param}" name="max_${param}" 
+                                   class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" 
+                                   step="0.0001" value="${limits.max || 1}">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">ערך קבוע</label>
+                            <input type="number" id="fixed_${param}" name="fixed_${param}" 
+                                   class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" 
+                                   step="0.0001" value="${limits.fixed_value || limits.min || 0}">
+                        </div>
+                        <div class="flex items-center justify-center">
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" id="optimize_${param}" name="optimize_${param}" 
+                                       class="w-4 h-4 text-blue-600 bg-slate-800 border-slate-600 rounded" 
+                                       ${limits.optimize !== false ? 'checked' : ''}>
+                                <span class="text-sm">אופטימיזציה</span>
+                            </label>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(paramDiv);
+            });
+        }
+
+        function saveConfiguration() {
+            const formData = new FormData(document.getElementById('config-form'));
+            const config = {};
+            
+            // Build configuration object
+            config.training_params = {
+                n_trials: parseInt(formData.get('n_trials')),
+                cv_splits: parseInt(formData.get('cv_splits')),
+                test_size_split: parseInt(formData.get('test_size_split')),
+                n_startup_trials: parseInt(formData.get('n_startup_trials')),
+                years_of_data: parseInt(formData.get('years_of_data')),
+                optuna_target_metric: formData.get('optuna_target_metric')
+            };
+            
+            config.backtest_params = {
+                initial_balance: parseInt(formData.get('initial_balance')),
+                commission: parseFloat(formData.get('commission')),
+                slippage: parseFloat(formData.get('slippage')),
+                min_history_days: parseInt(formData.get('min_history_days'))
+            };
+            
+            config.risk_params = {
+                position_size_pct: parseFloat(formData.get('position_size_pct'))
+            };
+            
+            config.contract = {
+                symbol: formData.get('symbol'),
+                secType: formData.get('secType'),
+                exchange: formData.get('exchange'),
+                currency: formData.get('currency'),
+                primaryExch: formData.get('primaryExch')
+            };
+            
+            config.api_settings = {
+                host: formData.get('api_host'),
+                port: parseInt(formData.get('api_port'))
+            };
+            
+            config.ibkr_settings = {
+                host: formData.get('ibkr_host'),
+                port: parseInt(formData.get('ibkr_port')),
+                clientId: parseInt(formData.get('clientId')),
+                history_window: formData.get('history_window')
+            };
+            
+            config.agent_settings = {
+                TEST_MODE_ENABLED: formData.get('TEST_MODE_ENABLED') === 'on',
+                TEST_BUY_QUANTITY: parseInt(formData.get('TEST_BUY_QUANTITY')),
+                TEST_BUY_PRICE_FACTOR: parseFloat(formData.get('TEST_BUY_PRICE_FACTOR'))
+            };
+            
+            // Build Optuna parameters
+            config.optuna_param_limits = {};
+            const params = ['horizon', 'threshold', 'top_n_features', 'stop_loss_pct', 'take_profit_pct', 'risk_per_trade', 'learning_rate', 'n_estimators', 'max_depth'];
+            
+            params.forEach(param => {
+                const minValue = formData.get(`min_${param}`);
+                const maxValue = formData.get(`max_${param}`);
+                const fixedValue = formData.get(`fixed_${param}`);
+                const optimize = formData.get(`optimize_${param}`) === 'on';
+                
+                if (minValue !== null && maxValue !== null) {
+                    config.optuna_param_limits[param] = {
+                        min: parseFloat(minValue),
+                        max: parseFloat(maxValue),
+                        fixed_value: parseFloat(fixedValue),
+                        optimize: optimize
+                    };
+                }
+            });
+            
+            // Save configuration
+            apiClient.put('/api/config', config).then(() => {
+                showToast('התצורה נשמרה בהצלחה', 'success');
+            }).catch(err => {
+                console.error('Error saving configuration:', err);
+                showToast('שגיאה בשמירת התצורה', 'error');
+            });
+        }
+
+        // Initialize new page functionality when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeTabs();
+            loadFeatureInfo();
+            loadTrainingResults();
+            loadBacktestResults();
+            loadAgentStatus();
+            loadConfigForm();
+            
+            // Add form submit handler
+            document.getElementById('config-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                saveConfiguration();
+            });
+            
+            // Auto-refresh agent status every 5 seconds
+            setInterval(() => {
+                if (currentPage === 'agent') {
+                    loadAgentStatus();
+                    loadAgentPositions();
+                }
+            }, 5000);
+            
+            // Auto-refresh backtest progress every 2 seconds
+            setInterval(() => {
+                if (currentPage === 'backtest') {
+                    loadBacktestResults();
+                }
+            }, 2000);
+        });
     </script>
 </body>
 </html>
