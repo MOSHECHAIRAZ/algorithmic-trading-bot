@@ -149,7 +149,7 @@ class ModelTrainer:
         
         # Identify numeric columns for feature selection, excluding target and date columns
         exclude_cols = ['target', 'future_return', 'next_day_return', 'daily_return', 'log_return']
-        feature_cols = [col for col in self.feature_data.columns if col not in exclude_cols and 
+        feature_cols = [col for col in self.feature_data.columns if col not in exclude_cols and
                         pd.api.types.is_numeric_dtype(self.feature_data[col])]
         
         # Fill NaN values with median
@@ -220,20 +220,20 @@ class ModelTrainer:
             # Apply scaling
             self.scaler = StandardScaler()
             self.X_train = pd.DataFrame(
-                self.scaler.fit_transform(self.X_train), 
-                columns=features, 
+                self.scaler.fit_transform(self.X_train),
+                columns=features,
                 index=self.X_train.index
             )
             
             self.X_val = pd.DataFrame(
-                self.scaler.transform(self.X_val), 
-                columns=features, 
+                self.scaler.transform(self.X_val),
+                columns=features,
                 index=self.X_val.index
             )
             
             self.X_test = pd.DataFrame(
-                self.scaler.transform(self.X_test), 
-                columns=features, 
+                self.scaler.transform(self.X_test),
+                columns=features,
                 index=self.X_test.index
             )
             
@@ -272,9 +272,6 @@ class ModelTrainer:
             'bagging_freq': trial.suggest_int('bagging_freq', 0, 10)
         }
         
-        # Create time series cross-validation
-        cv = TimeSeriesSplit(n_splits=self.cv_splits)
-        
         # Convert to LightGBM datasets
         lgb_train = lgb.Dataset(self.X_train, self.y_train)
         lgb_val = lgb.Dataset(self.X_val, self.y_val, reference=lgb_train)
@@ -301,7 +298,7 @@ class ModelTrainer:
         
         # Log metrics for this trial
         logger.info(f"Trial #{trial.number}: Accuracy={accuracy:.4f}, Precision={precision:.4f}, "
-                   f"Recall={recall:.4f}, F1={f1:.4f}")
+                    f"Recall={recall:.4f}, F1={f1:.4f}")
         
         # Return the target metric to optimize
         if self.target_metric == 'accuracy':
@@ -394,7 +391,7 @@ class ModelTrainer:
             
             # Log evaluation metrics
             logger.info(f"Test metrics - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, "
-                       f"Recall: {recall:.4f}, F1: {f1:.4f}")
+                        f"Recall: {recall:.4f}, F1: {f1:.4f}")
             logger.info(f"Confusion Matrix:\n{cm}")
             
             # Calculate ROC curve

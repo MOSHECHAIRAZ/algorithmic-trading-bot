@@ -2,7 +2,7 @@
 Preprocessing and Feature Engineering Module for Algorithmic Trading Bot
 
 This module is responsible for cleaning raw market data and calculating technical indicators
-using pandas, numpy, and pandas_ta. It handles data cleaning, feature calculation, 
+using pandas, numpy, and pandas_ta. It handles data cleaning, feature calculation,
 and stores processed data in the data/processed directory.
 
 Author: GitHub Copilot
@@ -107,7 +107,7 @@ class DataPreprocessor:
             # If there are still NaNs (at the beginning), fill with backward fill
             if df.isnull().sum().sum() > 0:
                 df = df.bfill()
-                logger.info(f"Filled remaining missing values with backward fill.")
+                logger.info("Filled remaining missing values with backward fill.")
         
         # Verify data integrity
         if df.empty:

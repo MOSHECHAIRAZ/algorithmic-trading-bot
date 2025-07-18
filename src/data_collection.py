@@ -88,7 +88,7 @@ def fetch_yfinance_data(symbol, period="5y", interval="1d", retries=3, retry_del
     attempt = 0
     while attempt < retries:
         try:
-            logger.info(f"Fetching data for {symbol}, attempt {attempt+1}/{retries}")
+            logger.info(f"Fetching data for {symbol}, attempt {attempt + 1}/{retries}")
             ticker = yf.Ticker(symbol)
             df = ticker.history(period=period, interval=interval)
             
