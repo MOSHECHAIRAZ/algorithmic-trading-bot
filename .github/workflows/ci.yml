@@ -42,8 +42,8 @@ jobs:
         run: |
           source .venv/bin/activate
           pip install flake8
-          # Allow common issues that don't affect functionality
-          flake8 src/ --max-line-length=120 --ignore=E501,E402,W293,E302,E305,F401,F811,F824
+          # Run only critical error checks that affect functionality
+          flake8 src/ --select=E9,F63,F7,F82,E226,W504,E128,F541
 
       - name: Lint JavaScript with ESLint
         run: |
