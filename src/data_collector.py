@@ -42,7 +42,7 @@ def fetch_all_historical_data(symbol='SPY', exchange='SMART', currency='USD', du
     ib = IB()
     try:
         logging.info("Attempting IBKR connection...")
-        ib.connect(IB_HOST, IB_PORT, clientId=IB_CLIENTID)
+        ib.connect(IB_HOST, IB_PORT, clientId=IB_CLIENTID, timeout=20)
         logging.info("Connected to IBKR!")
         # SPY
         contract = Stock(symbol, exchange, currency)

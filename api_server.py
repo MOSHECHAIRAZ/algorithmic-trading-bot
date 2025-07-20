@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 # api_server.py
 # This file replaces the old dashboard.py and acts as the central backend server.
 
@@ -16,7 +19,7 @@ import threading
 import hashlib
 from functools import wraps
 
-from flask import Flask, jsonify, request, send_from_directory, abort
+from flask import Flask, jsonify, request, send_from_directory, abort, make_response
 from flask_cors import CORS
 try:
     from flask_socketio import SocketIO, emit, disconnect
@@ -237,13 +240,54 @@ def get_process_status(name):
     if not proc:
         return {"status": "not_started", "pid": None}
     
+    # Check if process ID still exists in system
+    try:
+        import psutil
+        if not psutil.pid_exists(proc.pid):
+            # Process disappeared without proper termination
+            processes[name] = None
+            return {"status": "not_started", "pid": None}
+    except (ImportError, Exception) as e:
+        # If psutil not available, continue with standard check
+        pass
+    
     poll_result = proc.poll()
     if poll_result is None:
         return {"status": "running", "pid": proc.pid}
     else:
+        # Process finished, check for any output if possible
+        stdout = stderr = ""
+        if hasattr(proc, 'stdout') and proc.stdout:
+            try:
+                stdout = proc.stdout.read() if proc.stdout else ""
+            except:
+                stdout = ""
+                
+        if hasattr(proc, 'stderr') and proc.stderr:
+            try:
+                stderr = proc.stderr.read() if proc.stderr else ""
+            except:
+                stderr = ""
+        
         # Process finished, clear it from our state
         processes[name] = None
-        return {"status": "finished", "pid": proc.pid, "return_code": poll_result}
+        
+        status_info = {
+            "status": "finished", 
+            "pid": proc.pid, 
+            "return_code": poll_result,
+            "success": poll_result == 0
+        }
+        
+        # Add error details if the process failed
+        if poll_result != 0:
+            status_info["error"] = True
+            if stderr:
+                status_info["stderr"] = stderr.strip()
+            if stdout:
+                status_info["stdout"] = stdout.strip()
+        
+        return status_info
 
 # --- WebSocket Events ---
 if SOCKETIO_AVAILABLE:
@@ -279,11 +323,101 @@ def background_monitor():
     if not SOCKETIO_AVAILABLE:
         print("⚠️  Background monitoring disabled - WebSocket not available")
         return
+    
+    # Dictionary to keep track of process start times
+    process_start_times = {}
+    process_timeouts = {
+        "main_trainer": 1800,        # 30 דקות
+        "backtester": 1800,          # 30 דקות
+        "data_collector": 900,       # 15 דקות
+        "preprocessor": 600,         # 10 דקות
+        "feature_engineering": 1200, # 20 דקות
+        "run_all": 3600,             # שעה
+        "trading_agent": 86400,      # 24 שעות - אין להפסיק את הסוכן
+        "model_api": 86400           # 24 שעות - אין להפסיק את ה-API של המודל
+    }
+    
+    # בדיקת פעילות לפי קבצי לוג
+    log_file_map = {
+        "main_trainer": "logs/main_trainer_output.log",
+        "backtester": "logs/backtester_output.log",
+        "data_collector": "logs/data_collector.log",
+        "preprocessor": "logs/preprocessing.log",
+        "feature_engineering": "logs/all_features_computed.log",
+    }
+    
+    # Dictionary to store the last modified time of log files
+    log_last_modified = {}
         
     while True:
         try:
             # Check for status changes
             status_data = get_all_statuses_data()
+            
+            # Check for stuck processes and manage timeouts
+            current_time = time.time()
+            for name, status in status_data.items():
+                # If process is running
+                if status["status"] == "running":
+                    # Store start time if not already tracked
+                    if name not in process_start_times:
+                        process_start_times[name] = current_time
+                        print(f"Started tracking {name} process at {datetime.fromtimestamp(current_time)}")
+                    
+                    # בדיקה האם קובץ הלוג של התהליך מתעדכן
+                    if name in log_file_map and os.path.exists(log_file_map[name]):
+                        log_file = log_file_map[name]
+                        current_log_mtime = os.path.getmtime(log_file)
+                        
+                        # בדיקה האם התהליך הסתיים לפי הלוג
+                        try:
+                            with open(log_file, 'r', encoding='utf-8') as f:
+                                last_lines = ''.join(f.readlines()[-10:])  # 10 שורות אחרונות
+                                if "finished successfully" in last_lines or "Training pipeline finished" in last_lines:
+                                    print(f"Process '{name}' seems to have finished based on log file")
+                                    # התהליך הסתיים - נסה לסיים אותו
+                                    proc = processes[name]
+                                    if proc:
+                                        try:
+                                            proc.terminate()
+                                            processes[name] = None
+                                            del process_start_times[name]
+                                            print(f"Process '{name}' terminated after detecting completion in log")
+                                            continue  # המשך ללולאה הבאה
+                                        except Exception as e:
+                                            print(f"Error terminating process '{name}': {e}")
+                        except Exception as e:
+                            print(f"Error checking log file for '{name}': {e}")
+                    
+                    # Check if process exceeded its timeout
+                    elapsed_time = current_time - process_start_times[name]
+                    timeout = process_timeouts.get(name, 1800)  # Default 30 minutes
+                    
+                    if elapsed_time > timeout:
+                        print(f"⚠️ Process '{name}' (PID: {status['pid']}) timed out after {elapsed_time:.1f} seconds")
+                        
+                        # Try to terminate process
+                        try:
+                            proc = processes[name]
+                            if proc and proc.poll() is None:
+                                print(f"Terminating stuck process '{name}' (PID: {proc.pid})")
+                                proc.terminate()
+                                try:
+                                    proc.wait(timeout=5)
+                                except subprocess.TimeoutExpired:
+                                    print(f"Force killing stuck process '{name}' (PID: {proc.pid})")
+                                    proc.kill()
+                                    
+                                processes[name] = None
+                                del process_start_times[name]
+                                print(f"Process '{name}' has been terminated due to timeout")
+                        except Exception as e:
+                            print(f"Error terminating process '{name}': {e}")
+                else:
+                    # Process is not running, remove from tracking
+                    if name in process_start_times:
+                        del process_start_times[name]
+            
             ws_manager.broadcast('status_update', status_data)
             
             # Check for system info changes
@@ -397,11 +531,23 @@ def get_agent_position_data():
 
 # --- API Endpoints ---
 
+
 @app.route('/')
 def serve_dashboard():
-    """Serves the main dashboard.html file."""
-    # This ensures that visiting the root URL serves your new frontend
-    return send_from_directory('.', 'dashboard.html')
+    """Serves the main dashboard.html file with explicit Content-Type."""
+    try:
+        with open('dashboard.html', 'r', encoding='utf-8') as f:
+            html = f.read()
+        response = make_response(html)
+        response.headers['Content-Type'] = 'text/html; charset=utf-8'
+        return response
+    except Exception as e:
+        return f"Error loading dashboard.html: {e}", 500
+
+@app.route('/public/<path:filename>')
+def serve_public(filename):
+    """Serves files from the public directory."""
+    return send_from_directory('public', filename)
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -454,9 +600,137 @@ def start_process(name):
     try:
         proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
         processes[name] = proc
-        return jsonify({"message": f"תהליך '{name}' הופעל בהצלחה", "pid": proc.pid})
+        
+        # חכה קצת כדי לבדוק אם התהליך לא קרס מיד
+        time.sleep(2)
+        
+        if proc.poll() is None:
+            # התהליך עדיין רץ - זה סימן טוב
+            return jsonify({"message": f"תהליך '{name}' התחיל בהצלחה", "pid": proc.pid, "status": "running"})
+        else:
+            # התהליך נכשל
+            stdout, stderr = proc.communicate()
+            error_msg = f"תהליך '{name}' נכשל מיד לאחר ההפעלה"
+            if stderr:
+                error_msg += f"\nשגיאה: {stderr}"
+            if stdout:
+                error_msg += f"\nפלט: {stdout}"
+            
+            return jsonify({"error": error_msg, "exit_code": proc.returncode}), 500
     except Exception as e:
         return jsonify({"error": f"נכשל בהפעלת תהליך '{name}': {e}", "trace": traceback.format_exc()}), 500
+
+
+@app.route('/api/processes/run-and-wait/<name>', methods=['POST'])
+def run_and_wait_process(name):
+    """Run a process and wait for it to complete, similar to the old dashboard."""
+    if name not in processes:
+        processes[name] = None
+    
+    # בדיקה משופרת: אם התהליך מסומן כפעיל, בדוק אם הוא באמת פעיל במערכת
+    if get_process_status(name)["status"] == "running":
+        try:
+            # בדוק אם התהליך באמת פעיל במערכת
+            import psutil
+            proc = processes[name]
+            if not proc or not psutil.pid_exists(proc.pid):
+                # התהליך לא באמת פעיל, נאפס את הסטטוס
+                processes[name] = None
+                print(f"Process '{name}' was marked as running but does not exist - resetting")
+            else:
+                # התהליך אכן פעיל, לא ניתן להפעיל שוב
+                return jsonify({"error": f"Process '{name}' is already running"}), 400
+        except ImportError:
+            # אם psutil לא מותקן, נשתמש בבדיקה סטנדרטית
+            return jsonify({"error": f"Process '{name}' is already running"}), 400
+        except Exception as e:
+            # אם יש שגיאה אחרת, נניח שהתהליך לא פעיל ונאפס
+            processes[name] = None
+            print(f"Error checking process '{name}': {e} - resetting process state")
+
+    command = []
+    # Map process names to their respective script paths
+    script_map = {
+        "model_api": ["src/model_api.py"],
+        "main_trainer": ["main_trainer.py"],
+        "backtester": ["backtester.py"],
+        "data_collector": ["src/data_collector.py"],
+        "preprocessor": ["run_preprocessing.py"],
+        "feature_engineering": ["src/feature_engineering.py"],
+        "feature_engineering_technical": ["src/feature_engineering.py", "--category", "technical"],
+        "feature_engineering_candlestick": ["src/feature_engineering.py", "--category", "candlestick"],
+        "feature_engineering_volume": ["src/feature_engineering.py", "--category", "volume"],
+        "feature_engineering_statistical": ["src/feature_engineering.py", "--category", "statistical"],
+        "run_all": ["run_all.py"],
+    }
+
+    if name in script_map:
+        command = [sys.executable] + script_map[name]
+    elif name == "trading_agent":
+        command = ["node", "agent/trading_agent.js"]
+    else:
+        return jsonify({"error": "פקודת תהליך לא מוגדרת"}), 500
+
+    try:
+        proc = subprocess.Popen(
+            command, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT, 
+            text=True, 
+            encoding='utf-8',
+            errors='replace',
+            bufsize=1,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+        )
+        processes[name] = proc
+        
+        # במקום לחכות כאן ולחסום את שרת ה-API, פשוט נחזיר הודעה שהתהליך התחיל
+        return jsonify({
+            "message": f"תהליך '{name}' התחיל בהצלחה. בדוק את סטטוס התהליך בהמשך.",
+            "status": "running",
+            "pid": proc.pid
+        })
+        
+        # קוד זה לא יגיע לכאן יותר כי החזרנו תגובה מוקדם יותר
+        # משאיר את זה כאן למקרה שנשנה את הקוד בעתיד
+            
+    except FileNotFoundError:
+        return jsonify({"error": f"שגיאה: הפקודה '{command[0]}' לא נמצאה. ודא שהנתיב נכון."}), 500
+    except Exception as e:
+        return jsonify({"error": f"שגיאה בהרצת התהליך: {e}", "trace": traceback.format_exc()}), 500
+
+
+@app.route('/api/processes/logs/<name>', methods=['GET'])
+def get_process_logs(name):
+    """Get logs for a specific process to help debug failures."""
+    log_files = {
+        "data_collector": "logs/data_collector.log",
+        "main_trainer": "main_trainer_output.log",
+        "backtester": "backtester_output.log",
+        "preprocessor": "logs/processing.log",
+        "feature_engineering": "logs/feature_engineering.log",
+        "model_api": "logs/model_api.log"
+    }
+    
+    log_file = log_files.get(name)
+    if not log_file:
+        return jsonify({"error": f"No log file configured for process '{name}'"}), 404
+    
+    try:
+        if os.path.exists(log_file):
+            with open(log_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                # Return last 50 lines
+                recent_lines = lines[-50:] if len(lines) > 50 else lines
+                return jsonify({
+                    "logs": ''.join(recent_lines),
+                    "total_lines": len(lines),
+                    "showing_lines": len(recent_lines)
+                })
+        else:
+            return jsonify({"error": f"Log file not found: {log_file}"}), 404
+    except Exception as e:
+        return jsonify({"error": f"Failed to read log file: {e}"}), 500
 
 
 @app.route('/api/processes/stop/<name>', methods=['POST'])
@@ -1421,6 +1695,43 @@ def delete_model(ts):
     except Exception as e:
         return jsonify({"error": f"Failed to delete model {ts}: {e}"}), 500
 
+@app.route('/api/ibkr/status', methods=['GET'])
+def check_ibkr_status():
+    """Check if IBKR Gateway/TWS is available."""
+    try:
+        config = load_system_config()
+        ibkr_settings = config.get('ibkr_settings', {})
+        host = ibkr_settings.get('host', '127.0.0.1')
+        port = int(ibkr_settings.get('port', 4001))
+        
+        # Try to connect to IBKR port
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(3)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        
+        if result == 0:
+            return jsonify({
+                "status": "available",
+                "host": host,
+                "port": port,
+                "message": "IBKR Gateway/TWS is accessible"
+            })
+        else:
+            return jsonify({
+                "status": "unavailable",
+                "host": host,
+                "port": port,
+                "message": "IBKR Gateway/TWS is not accessible. Make sure it's running and API is enabled.",
+                "error_code": result
+            })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to check IBKR status: {e}"
+        }), 500
+
 if __name__ == '__main__':
     # Start background monitoring thread
     monitor_thread = threading.Thread(target=background_monitor, daemon=True)
@@ -1436,6 +1747,8 @@ if __name__ == '__main__':
     
     # Run with SocketIO if available, otherwise regular Flask
     if SOCKETIO_AVAILABLE and socketio:
+        # Use eventlet for better WebSocket performance
+        print("✅ Using eventlet for WebSocket server.")
         socketio.run(app, host='0.0.0.0', port=5001, debug=True)
     else:
         app.run(host='0.0.0.0', port=5001, debug=True)

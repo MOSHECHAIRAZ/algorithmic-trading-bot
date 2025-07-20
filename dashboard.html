@@ -24,148 +24,48 @@
 
     <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
-
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap');
-        body {
-            font-family: 'Rubik', sans-serif;
-            background-color: #0f172a;
-            color: #f8fafc;
-        }
-        .card {
-            background-color: #1e293b;
-            border-radius: 0.75rem;
-            padding: 1.5rem;
-            border: 1px solid #334155;
-        }
-        .btn {
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            font-weight: 500;
-            transition: all 0.2s ease-in-out;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            cursor: pointer;
-        }
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        .btn-primary { background-color: #3b82f6; color: white; }
-        .btn-primary:hover:not(:disabled) { background-color: #2563eb; }
-        .btn-secondary { background-color: #475569; color: white; }
-        .btn-secondary:hover:not(:disabled) { background-color: #334155; }
-        .btn-danger { background-color: #ef4444; color: white; }
-        .btn-danger:hover:not(:disabled) { background-color: #dc2626; }
-        
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-left: 8px; }
-        .status-green { background-color: #22c55e; }
-        .status-red { background-color: #ef4444; }
-        .status-yellow { background-color: #f59e0b; }
-        .status-gray { background-color: #64748b; }
-
-        .page-content, .tab-content { display: none; }
-        .page-content.active, .tab-content.active { display: block; }
-        
-        .tab-button { padding: 0.75rem 1.5rem; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.3s; }
-        .tab-button.active { color: #3b82f6; border-bottom-color: #3b82f6; }
-        .tab-button:hover { background-color: rgba(59, 130, 246, 0.1); }
-
-        #toast {
-            position: fixed;
-            bottom: -100px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 1rem 2rem;
-            border-radius: 0.5rem;
-            color: white;
-            font-weight: 500;
-            transition: bottom 0.5s ease-in-out;
-            z-index: 100;
-        }
-        #toast.show { bottom: 20px; }
-        #toast.success { background-color: #22c55e; }
-        #toast.error { background-color: #ef4444; }
-        
-        /* Spinner Animation */
-        .spinner {
-            width: 16px;
-            height: 16px;
-            border: 2px solid #475569;
-            border-top: 2px solid #3b82f6;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* Progress Bar */
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background-color: #475569;
-            border-radius: 4px;
-            overflow: hidden;
-            position: relative;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background-color: #3b82f6;
-            transition: width 0.3s ease;
-            border-radius: 4px;
-        }
-        
-        .progress-indeterminate {
-            height: 100%;
-            background: linear-gradient(90deg, transparent, #3b82f6, transparent);
-            width: 30%;
-            animation: loading 1.5s infinite;
-        }
-        
-        @keyframes loading {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(333%); }
-        }
-        
-        /* Process Status */
-        .process-status {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            margin-top: 0.5rem;
-            border: 1px solid #374151;
-        }
-        
-        .process-status.running {
-            background-color: #065f46;
-            border-color: #10b981;
-        }
-        
-        .process-status.error {
-            background-color: #7f1d1d;
-            border-color: #ef4444;
-        }
-        
-        .process-status.success {
-            background-color: #064e3b;
-            border-color: #22c55e;
-        }
-        
-        .process-status.idle {
-            background-color: #374151;
-            border-color: #6b7280;
-        }
-    </style>
+    
+    <!-- עיצוב מותאם אישית - קישור לקובץ CSS חיצוני -->
+    <link rel="stylesheet" href="/public/dashboard.css">
 </head>
 <body class="flex min-h-screen">
+
+    <!-- Debug Output -->
+    <div id="debug-output" style="position: fixed; top: 0; left: 0; width: 100%; height: 200px; background-color: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; z-index: 9999; overflow-y: scroll; padding: 10px; border-bottom: 2px solid #f00;"></div>
+    <script>
+        (function () {
+            const debugOutput = document.getElementById('debug-output');
+            if (!debugOutput) return;
+            const oldLog = console.log;
+            const oldError = console.error;
+            const oldWarn = console.warn;
+
+            function createLogEntry(message, color = '#0f0') {
+                const entry = document.createElement('div');
+                entry.textContent = `[${new Date().toISOString()}] ${message}`;
+                entry.style.color = color;
+                entry.style.borderBottom = '1px solid #333';
+                debugOutput.appendChild(entry);
+                debugOutput.scrollTop = debugOutput.scrollHeight;
+            }
+
+            console.log = function (message, ...args) {
+                createLogEntry(`LOG: ${message} ${args.join(' ')}`);
+                oldLog.apply(console, arguments);
+            };
+            console.error = function (message, ...args) {
+                createLogEntry(`ERROR: ${message} ${args.join(' ')}`, '#f00');
+                oldError.apply(console, arguments);
+            };
+            console.warn = function (message, ...args) {
+                createLogEntry(`WARN: ${message} ${args.join(' ')}`, '#ff0');
+                oldWarn.apply(console, arguments);
+            };
+            window.addEventListener('error', function (event) {
+                createLogEntry(`UNCAUGHT ERROR: ${event.message} at ${event.filename}:${event.lineno}`, '#f00');
+            });
+        })();
+    </script>
 
     <!-- Sidebar -->
     <aside id="sidebar" class="bg-slate-900 text-white w-64 p-4 space-y-4 fixed top-0 right-0 h-full shadow-lg transition-transform duration-300 ease-in-out md:translate-x-0 -translate-x-full z-40">
@@ -210,9 +110,6 @@
                 <i data-lucide="sliders-horizontal" class="w-6 h-6"></i><span>תצורת מערכת</span>
             </a>
         </nav>
-        <div class="absolute bottom-4 right-4 left-4">
-             <button id="logout-button" class="btn btn-secondary w-full"><i data-lucide="log-out" class="w-4 h-4"></i><span>התנתק</span></button>
-        </div>
     </aside>
     
     <!-- Mobile Menu Toggle -->
@@ -341,7 +238,7 @@
                             <i data-lucide="workflow" class="text-blue-400"></i>תהליכי נתונים
                         </h3>
                         <div class="space-y-3">
-                            <button class="btn btn-primary w-full text-lg py-3" onclick="startProcess('run_all')">
+                            <button class="btn btn-primary w-full text-lg py-3" onclick="runAndWaitProcess('run_all')">
                                 <i data-lucide="rocket" class="w-5 h-5"></i>הרץ את כל תהליך הנתונים
                             </button>
                             <div class="process-status idle" data-process="run_all">
@@ -354,8 +251,11 @@
                                 <h4 class="text-sm font-semibold mb-3">שלבי תהליך הנתונים:</h4>
                                 <div class="grid grid-cols-1 gap-2">
                                     <div class="flex items-center gap-2">
-                                        <button class="btn btn-secondary w-full" onclick="startProcess('data_collector')">
+                                        <button class="btn btn-secondary w-full" onclick="runAndWaitProcess('data_collector')">
                                             <i data-lucide="download" class="w-4 h-4"></i>1. איסוף נתונים
+                                        </button>
+                                        <button class="btn btn-sm btn-outline" onclick="checkIBKRStatus()" title="בדוק מצב IBKR Gateway">
+                                            <i data-lucide="wifi" class="w-4 h-4"></i>
                                         </button>
                                     </div>
                                     <div class="process-status idle" data-process="data_collector">
@@ -364,7 +264,7 @@
                                         <span class="status-text">מוכן</span>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <button class="btn btn-secondary w-full" onclick="startProcess('preprocessor')">
+                                        <button class="btn btn-secondary w-full" onclick="runAndWaitProcess('preprocessor')">
                                             <i data-lucide="filter" class="w-4 h-4"></i>2. עיבוד נתונים
                                         </button>
                                     </div>
@@ -458,12 +358,14 @@
                                     <span class="flex items-center gap-2">
                                         <i data-lucide="brain" class="text-blue-400"></i>פרמטרי אימון
                                     </span>
-                                    <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-training-params"></i>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 chevron-icon" id="chevron-training-params">
+                                        <path d="m6 9 6 6 6-6"></path>
+                                    </svg>
                                 </button>
                                 <div id="training-params" class="grid grid-cols-1 md:grid-cols-2 gap-4" style="display: none;">
                                     <div>
                                         <label class="block text-sm font-medium mb-1">מספר ניסיונות Optuna</label>
-            שיש בכל מודל. בקטסט מימין מחיקה ב                             <input type="number" id="n_trials" name="n_trials" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="1" value="100">
+                                        <input type="number" id="n_trials" name="n_trials" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white" min="1" value="100">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium mb-1">מספר קפלים (CV)</label>
@@ -498,7 +400,9 @@
                                     <span class="flex items-center gap-2">
                                         <i data-lucide="sliders" class="text-blue-400"></i>גבולות פרמטרי אופטימיזציה
                                     </span>
-                                    <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-optuna-limits"></i>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 chevron-icon" id="chevron-optuna-limits">
+                                        <path d="m6 9 6 6 6-6"></path>
+                                    </svg>
                                 </button>
                                 <div id="optuna-limits" class="space-y-4" style="display: none;">
                                     <div id="optuna-params" class="space-y-4">
@@ -513,7 +417,9 @@
                                     <span class="flex items-center gap-2">
                                         <i data-lucide="trending-up" class="text-blue-400"></i>פרמטרי Backtest
                                     </span>
-                                    <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-backtest-params"></i>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 chevron-icon" id="chevron-backtest-params">
+                                        <path d="m6 9 6 6 6-6"></path>
+                                    </svg>
                                 </button>
                                 <div id="backtest-params" class="grid grid-cols-1 md:grid-cols-2 gap-4" style="display: none;">
                                     <div>
@@ -545,7 +451,9 @@
                                     <span class="flex items-center gap-2">
                                         <i data-lucide="file-text" class="text-blue-400"></i>פרטי חוזה ונכס
                                     </span>
-                                    <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-contract-settings"></i>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 chevron-icon" id="chevron-contract-settings">
+                                        <path d="m6 9 6 6 6-6"></path>
+                                    </svg>
                                 </button>
                                 <div id="contract-settings" class="grid grid-cols-1 md:grid-cols-2 gap-4" style="display: none;">
                                     <div>
@@ -590,7 +498,9 @@
                                     <span class="flex items-center gap-2">
                                         <i data-lucide="wifi" class="text-blue-400"></i>הגדרות חיבורים
                                     </span>
-                                    <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-connection-settings"></i>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 chevron-icon" id="chevron-connection-settings">
+                                        <path d="m6 9 6 6 6-6"></path>
+                                    </svg>
                                 </button>
                                 <div id="connection-settings" class="grid grid-cols-1 md:grid-cols-2 gap-4" style="display: none;">
                                     <div>
@@ -626,7 +536,9 @@
                                     <span class="flex items-center gap-2">
                                         <i data-lucide="bot" class="text-blue-400"></i>הגדרות סוכן
                                     </span>
-                                    <i data-lucide="chevron-down" class="text-gray-400 chevron-icon" id="chevron-agent-settings"></i>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 chevron-icon" id="chevron-agent-settings">
+                                        <path d="m6 9 6 6 6-6"></path>
+                                    </svg>
                                 </button>
                                 <div id="agent-settings" class="grid grid-cols-1 md:grid-cols-2 gap-4" style="display: none;">
                                     <div class="flex items-center space-x-2">
@@ -666,7 +578,7 @@
                             <i data-lucide="settings" class="text-blue-400"></i>בקרת יצירת פיצ'רים
                         </h3>
                         <div class="space-y-4">
-                            <button class="btn btn-primary w-full text-lg py-3" onclick="startProcess('feature_engineering')">
+                            <button class="btn btn-primary w-full text-lg py-3" onclick="runAndWaitProcess('feature_engineering')">
                                 <i data-lucide="sparkles" class="w-5 h-5"></i>יצירת כל הפיצ'רים
                             </button>
                             <div class="process-status idle" data-process="feature_engineering">
@@ -755,7 +667,7 @@
                             <i data-lucide="brain" class="text-blue-400"></i>בקרת אימון
                         </h3>
                         <div class="space-y-4">
-                            <button class="btn btn-primary w-full text-lg py-3" onclick="startProcess('main_trainer')">
+                            <button class="btn btn-primary w-full text-lg py-3" onclick="runAndWaitProcess('main_trainer')">
                                 <i data-lucide="play" class="w-5 h-5"></i>התחל אימון מלא
                             </button>
                             <div class="process-status idle" data-process="main_trainer">
@@ -902,7 +814,7 @@
                             <i data-lucide="play" class="text-blue-400"></i>בקרת בקטסט
                         </h3>
                         <div class="space-y-4">
-                            <button class="btn btn-primary w-full text-lg py-3" onclick="startProcess('backtester')">
+                            <button class="btn btn-primary w-full text-lg py-3" onclick="runAndWaitProcess('backtester')">
                                 <i data-lucide="play" class="w-5 h-5"></i>הפעל בקטסט
                             </button>
                             <div class="process-status idle" data-process="backtester">
@@ -1173,18 +1085,11 @@
         </div>
     </main>
     
-    <!-- Login Overlay & Toast -->
-    <div id="login-overlay" class="fixed inset-0 bg-slate-900 bg-opacity-95 z-50 flex items-center justify-center"><div class="card w-full max-w-sm text-center"><h2 class="text-2xl font-bold mb-6">כניסה למערכת</h2><form id="login-form"><input type="password" id="password-input" placeholder="סיסמה" class="w-full bg-slate-600 p-3 rounded mb-4 text-center"><button type="submit" class="btn btn-primary w-full p-3">התחבר</button></form><p id="login-error" class="text-red-400 mt-4 hidden">סיסמה שגויה.</p></div></div>
+    <!-- Toast -->
     <div id="toast"></div>
 
-    <script>
-        const API_BASE_URL = 'http://127.0.0.1:5001';
-        let charts = {}; // To hold chart instances
-        let socket = null; // WebSocket connection
-        let isConnected = false;
-        let reconnectInterval = null;
-        let fallbackIntervals = []; // Store fallback intervals
-        let lastDisconnectToast = 0; // Track when last disconnect toast was shown
+    <!-- JavaScript - קישור לקובץ החיצוני -->
+    <script src="/public/dashboard.js"></script>
 
         // --- WebSocket Connection Manager ---
         function initializeWebSocket() {
@@ -1350,14 +1255,32 @@
                     }
                 }
                 
+                // Enhanced error information
+                const errorInfo = {
+                    ...errorData,
+                    status: response.status,
+                    statusText: response.statusText,
+                    url: response.url
+                };
+                
                 // Only show toast for actual errors, not missing data
                 if (response.status !== 404) {
                     const errorMsg = errorData.error || `שגיאה ${response.status}`;
-                    showToast(errorMsg, 'error');
+                    
+                    // For specific errors, provide more context
+                    if (errorData.stderr && errorData.stderr.includes('ConnectionRefusedError')) {
+                        errorInfo.error = 'שגיאת חיבור: IBKR Gateway אינו זמין או API לא מופעל';
+                        errorInfo.suggestion = 'וודא שהפעלת את IBKR Gateway והפעלת את ה-API';
+                    } else if (errorData.stderr && errorData.stderr.includes('WinError 1225')) {
+                        errorInfo.error = 'שגיאת רשת: החיבור נדחה';
+                        errorInfo.suggestion = 'בדוק שהפורט 4001 פתוח ו-IBKR Gateway רץ';
+                    }
+                    
+                    showToast(errorInfo.error, 'error');
                 }
                 
-                // Return the error data structure for graceful handling
-                throw errorData;
+                // Return the enhanced error data structure for graceful handling
+                throw errorInfo;
             }
             return response.json();
         }
@@ -1411,8 +1334,8 @@
         // --- Main App Logic ---
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
-            setupAuth();
             setupNavigation();
+            initializeApp();
             
             // Check server health on startup
             checkServerHealth();
@@ -1420,41 +1343,6 @@
             // Check server health every 2 minutes
             setInterval(checkServerHealth, 120000);
         });
-
-        function setupAuth() {
-            const loginOverlay = document.getElementById('login-overlay');
-            const loginForm = document.getElementById('login-form');
-            const passwordInput = document.getElementById('password-input');
-            const loginError = document.getElementById('login-error');
-            const logoutButton = document.getElementById('logout-button');
-            const correctPassword = "admin";
-
-            const checkAuth = () => {
-                if (sessionStorage.getItem('authenticated') === 'true') {
-                    loginOverlay.style.display = 'none';
-                    initializeApp();
-                } else {
-                    loginOverlay.style.display = 'flex';
-                }
-            };
-
-            loginForm.addEventListener('submit', (event) => {
-                event.preventDefault();
-                if (passwordInput.value === correctPassword) {
-                    sessionStorage.setItem('authenticated', 'true');
-                    checkAuth();
-                } else {
-                    loginError.classList.remove('hidden');
-                }
-            });
-            
-            logoutButton.addEventListener('click', () => {
-                sessionStorage.removeItem('authenticated');
-                checkAuth();
-            });
-
-            checkAuth();
-        }
 
         function setupNavigation() {
             const navLinks = document.querySelectorAll('.nav-link');
@@ -2449,9 +2337,36 @@
                     setTimeout(updateAllStatuses, 1000); 
                 })
                 .catch(err => {
-                    const errorMsg = err.response?.data?.error || err.message || 'שגיאה לא ידועה';
+                    console.error('Process start error:', err);
+                    const errorMsg = err.error || err.message || 'שגיאה לא ידועה';
+                    
+                    // הצגת הודעת שגיאה מפורטת
+                    const detailedError = `
+                        <div class="bg-red-900/20 border border-red-500/50 rounded-lg p-4 mb-4">
+                            <div class="flex items-center gap-2 mb-3">
+                                <i data-lucide="alert-triangle" class="w-5 h-5 text-red-400"></i>
+                                <h4 class="font-semibold text-red-400">שגיאה בתהליך: ${name}</h4>
+                            </div>
+                            <p class="text-sm text-slate-300 mb-3">${errorMsg}</p>
+                            <div class="flex gap-2">
+                                <button class="btn btn-sm btn-outline" onclick="viewProcessLogs('${name}')">
+                                    <i data-lucide="file-text" class="w-4 h-4"></i>צפה בלוגים
+                                </button>
+                                <button class="btn btn-sm btn-outline" onclick="checkIBKRStatus()" title="בדוק מצב IBKR Gateway">
+                                    <i data-lucide="wifi" class="w-4 h-4"></i>בדוק IBKR
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
                     showToast(`שגיאה: ${errorMsg}`, 'error');
                     showProcessStatus(name, 'error', `שגיאה: ${errorMsg}`);
+                    
+                    // הצגת השגיאה בפריט הסטטוס
+                    const statusElement = document.querySelector(`[data-process="${name}"]`);
+                    if (statusElement) {
+                        statusElement.innerHTML = detailedError;
+                    }
                 })
                 .finally(() => {
                     setTimeout(() => {
@@ -2459,6 +2374,93 @@
                     }, 2000);
                 });
         };
+
+        // New function that waits for process completion like the old dashboard
+        window.runAndWaitProcess = (name) => {
+            showProcessStatus(name, 'running', 'מריץ תהליך וממתין לסיום...');
+            updateButtonState(name, true);
+            
+            return apiClient.post(`/api/processes/run-and-wait/${name}`, {})
+                .then(res => { 
+                    showToast(res.message, 'success'); 
+                    showProcessStatus(name, 'success', res.message);
+                    setTimeout(updateAllStatuses, 1000); 
+                })
+                .catch(err => {
+                    console.error('Process run-and-wait error:', err);
+                    const errorMsg = err.error || err.message || 'שגיאה לא ידועה';
+                    
+                    // הצגת הודעת שגיאה מפורטת
+                    const detailedError = `
+                        <div class="bg-red-900/20 border border-red-500/50 rounded-lg p-4 mb-4">
+                            <div class="flex items-center gap-2 mb-3">
+                                <i data-lucide="alert-triangle" class="w-5 h-5 text-red-400"></i>
+                                <h4 class="font-semibold text-red-400">שגיאה בתהליך: ${name}</h4>
+                            </div>
+                            <p class="text-sm text-slate-300 mb-3">${errorMsg}</p>
+                            <div class="flex gap-2">
+                                <button class="btn btn-sm btn-outline" onclick="viewProcessLogs('${name}')">
+                                    <i data-lucide="file-text" class="w-4 h-4"></i>צפה בלוגים
+                                </button>
+                                <button class="btn btn-sm btn-outline" onclick="checkIBKRStatus()" title="בדוק מצב IBKR Gateway">
+                                    <i data-lucide="wifi" class="w-4 h-4"></i>בדוק IBKR
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    showToast(`שגיאה: ${errorMsg}`, 'error');
+                    showProcessStatus(name, 'error', `שגיאה: ${errorMsg}`);
+                    
+                    // הצגת השגיאה בפריט הסטטוס
+                    const statusElement = document.querySelector(`[data-process="${name}"]`);
+                    if (statusElement) {
+                        statusElement.innerHTML = detailedError;
+                    }
+                })
+                .finally(() => {
+                    setTimeout(() => {
+                        updateButtonState(name, false);
+                    }, 2000);
+                });
+        };
+
+        // View Process Logs Function
+        window.viewProcessLogs = (processName) => {
+            const logMap = {
+                'data_collector': 'data_collector',
+                'main_trainer': 'main_trainer',
+                'backtester': 'backtester',
+                'preprocessor': 'preprocessor',
+                'feature_engineering': 'feature_engineering',
+                'model_api': 'model_api'
+            };
+            
+            const logProcess = logMap[processName];
+            if (!logProcess) {
+                showToast(`לא נמצא לוג עבור תהליך: ${processName}`, 'error');
+                return;
+            }
+            
+            // מעבר לעמוד הלוגים
+            switchPage('logs');
+            
+            // בחירת הלוג הנכון
+            setTimeout(() => {
+                const logSelector = document.getElementById('log-selector');
+                if (logSelector) {
+                    // נסה למצוא את הלוג הנכון
+                    for (let option of logSelector.options) {
+                        if (option.value.includes(logProcess)) {
+                            logSelector.value = option.value;
+                            loadLogContent();
+                            break;
+                        }
+                    }
+                }
+            }, 500);
+        };
+
         window.sendAgentCommand = (body) => {
             apiClient.post('/api/agent/command', body).then(res => {
                 showToast(res.message, 'success');
@@ -2693,21 +2695,44 @@
         }
 
         // Configuration section toggle functionality
-        function toggleSection(sectionId) {
+        window.toggleSection = function(sectionId) {
+            console.log('toggleSection called with:', sectionId);
             const section = document.getElementById(sectionId);
             const chevron = document.getElementById(`chevron-${sectionId}`);
             
-            if (section.style.display === 'none' || section.style.display === '') {
-                section.style.display = 'block';
-                chevron.setAttribute('data-lucide', 'chevron-up');
-            } else {
-                section.style.display = 'none';
-                chevron.setAttribute('data-lucide', 'chevron-down');
+            console.log('Section found:', section);
+            console.log('Chevron found:', chevron);
+            
+            if (!section) {
+                console.error('Section not found:', sectionId);
+                return;
             }
             
-            // Re-render lucide icons
-            lucide.createIcons();
-        }
+            // Get computed style instead of inline style
+            const computedStyle = window.getComputedStyle(section);
+            const isHidden = computedStyle.display === 'none' || section.style.display === 'none';
+            
+            console.log('Current display style:', section.style.display);
+            console.log('Computed display style:', computedStyle.display);
+            console.log('Is hidden:', isHidden);
+            
+            if (isHidden) {
+                // Remove the display: none to show the element with its original CSS
+                section.style.display = '';
+                console.log('Opening section');
+                if (chevron) {
+                    chevron.innerHTML = '<path d="m18 15-6-6-6 6"></path>';
+                    console.log('Changed chevron to up');
+                }
+            } else {
+                section.style.display = 'none';
+                console.log('Closing section');
+                if (chevron) {
+                    chevron.innerHTML = '<path d="m6 9 6 6 6-6"></path>';
+                    console.log('Changed chevron to down');
+                }
+            }
+        };
 
         // Backtest Functions
         function runQuickBacktest() {
@@ -3068,6 +3093,28 @@
                 showToast('שגיאה בשמירת התצורה', 'error');
             });
         }
+
+        // IBKR Status Check Function
+        window.checkIBKRStatus = () => {
+            const button = event.target;
+            const originalContent = button.innerHTML;
+            
+            button.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i>';
+            button.disabled = true;
+            
+            apiClient.get('/api/ibkr/status').then(data => {
+                if (data.status === 'available') {
+                    showToast('✅ IBKR Gateway זמין וניתן לחיבור', 'success');
+                } else {
+                    showToast(`❌ IBKR Gateway לא זמין: ${data.message}`, 'error');
+                }
+            }).catch(err => {
+                showToast(`❌ שגיאה בבדיקת IBKR: ${err.message}`, 'error');
+            }).finally(() => {
+                button.innerHTML = originalContent;
+                button.disabled = false;
+            });
+        };
 
         // Initialize new page functionality when DOM is ready
         document.addEventListener('DOMContentLoaded', () => {

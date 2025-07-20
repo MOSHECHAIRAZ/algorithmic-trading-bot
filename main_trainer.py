@@ -313,6 +313,10 @@ def main():
     }
     save_training_summary(training_summary)
     logging.info("--- Training pipeline finished successfully! ---")
+    # מוודא שהתהליך יוצא בצורה מסודרת
+    return 0
 
 if __name__ == "__main__":
-    main()
+    exit_code = main()
+    # מוודא יציאה מסודרת מהתהליך
+    sys.exit(exit_code)

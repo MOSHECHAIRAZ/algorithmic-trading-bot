@@ -46,11 +46,7 @@ data/features/
 models/*
 reports/backtest_results/*
 
-# But DO NOT ignore the champion and candidate files
-!models/champion_*.*
-!models/candidate_*.*
-!reports/backtest_results/summary_champion.json
-!reports/backtest_results/summary_candidate_*.json
+
 
 # Reports and plots
 reports/plots/
@@ -96,6 +92,15 @@ Thumbs.db
 
 # Database files
 db/
+
+# Test files
+test_*.py
+
+# Backup files
+archive/backup_*
+
+# Public assets
+public/
 
 # Backtest results
 

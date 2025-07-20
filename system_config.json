@@ -1,11 +1,11 @@
 {
   "training_params": {
-    "n_trials": 123,
-    "cv_splits": 5,
+    "n_trials": 2,
+    "cv_splits": 3,
     "test_size_split": 20,
-    "n_startup_trials": 10,
+    "n_startup_trials": 1,
     "years_of_data": 15,
-    "optuna_target_metric": "total_return"
+    "optuna_target_metric": "multi_objective"
   },
   "backtest_params": {
     "initial_balance": 100000,
@@ -30,12 +30,65 @@
   "ibkr_settings": {
     "host": "127.0.0.1",
     "port": 4001,
-    "clientId": 101,
+    "clientId": 1,
     "history_window": "90 D"
   },
   "agent_settings": {
     "TEST_MODE_ENABLED": true,
     "TEST_BUY_QUANTITY": 1,
     "TEST_BUY_PRICE_FACTOR": 0.95
-  }
+  },
+  "optuna_param_limits": {
+    "horizon": {
+      "min": 3,
+      "max": 20,
+      "optimize": true
+    },
+    "threshold": {
+      "min": 0.005,
+      "max": 0.03,
+      "optimize": true
+    },
+    "top_n_features": {
+      "min": 20,
+      "max": 100,
+      "optimize": true
+    },
+    "stop_loss_pct": {
+      "min": 1.0,
+      "max": 5.0,
+      "optimize": true
+    },
+    "take_profit_pct": {
+      "min": 1.0,
+      "max": 10.0,
+      "optimize": true
+    },
+    "risk_per_trade": {
+      "min": 0.01,
+      "max": 0.05,
+      "optimize": true
+    },
+    "learning_rate": {
+      "min": 0.001,
+      "max": 0.1,
+      "optimize": true
+    },
+    "n_estimators": {
+      "min": 50,
+      "max": 300,
+      "optimize": true
+    },
+    "max_depth": {
+      "min": 3,
+      "max": 10,
+      "optimize": true
+    }
+  },
+  "system_paths": {
+    "preprocessed_data": "data/processed/SPY_processed.csv",
+    "feature_data": "data/processed/SPY_features.csv",
+    "champion_model": "models/champion_model.pkl"
+  },
+  "processed_data_path": "data/processed/SPY_features.csv"
 }
