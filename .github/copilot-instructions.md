@@ -94,6 +94,13 @@ algorithmic-trading-bot/
 4. **Testing**: Minimum 80% test coverage
 5. **Linting**: Black, isort, flake8 for Python; ESLint for Node.js
 
+### 🚨 CRITICAL: Always Follow These Patterns
+- **Every function must have type hints and docstrings**
+- **Always import logging and use logger.info/error for important events**
+- **Use try/except blocks for external API calls (IB API, file operations)**
+- **Follow the exact naming conventions: snake_case for Python, camelCase for JS**
+- **Include input validation for all function parameters**
+
 ### Enterprise-Grade Development Principles
 1. **Official Documentation First**: Always consult official documentation before implementation
 2. **Established Patterns**: Use proven design patterns from financial software industry
@@ -153,6 +160,36 @@ class TradingStrategy:
                 
         return params
 ```
+
+### 🎯 Copilot Prompt Optimization Tips
+When writing code, use these patterns to get better suggestions:
+
+1. **Start with clear docstrings** - Copilot reads them and suggests accordingly
+2. **Use descriptive function names** - `calculate_position_size()` vs `calc()`
+3. **Add type hints first** - This guides Copilot's suggestions
+4. **Write TODO comments** - `# TODO: Add IB API connection logic here`
+5. **Reference our standards** - `# Following our enterprise error handling pattern:`
+
+### 🔄 Making Copilot Follow Instructions Better
+
+#### **In your code comments, explicitly reference these instructions:**
+```python
+# Following our enterprise standards from copilot-instructions.md
+# Need: type hints, docstring, error handling, logging
+def place_order(symbol: str, quantity: int) -> bool:
+    """Place order following our IB API patterns."""
+    pass
+```
+
+#### **Use specific prompts that reference our guidelines:**
+```python
+# TODO: Implement following our risk management framework
+# TODO: Add IB API integration per our documentation standards  
+# TODO: Include proper error handling as specified in instructions
+```
+
+#### **Leverage Copilot Chat with context:**
+When using Copilot Chat, start with: "Following the enterprise standards in our copilot-instructions.md, please help me..."
 
 ---
 
