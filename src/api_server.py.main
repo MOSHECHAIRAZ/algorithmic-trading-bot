@@ -1,0 +1,3737 @@
+import sys
+
+# Force UTF-8 encoding for stdout/stderr to avoid UnicodeEncodeError on Windows consoles
+if sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
+# Import eventlet conditionally
+try:
+    import eventlet
+    eventlet.monkey_patch()
+    EVENTLET_AVAILABLE = True
+    print("Using eventlet for improved concurrency.")
+except ImportError:
+    EVENTLET_AVAILABLE = False
+    print("Warning: eventlet not available. Using Flask's default threading model.")
+    print("Consider installing eventlet for better performance: pip install eventlet")
+
+# api_server.py
+# This file replaces the old dashboard.py and acts as the central backend server.
+
+import subprocess
+import json
+import os
+import shutil
+import time
+import pandas as pd
+from pathlib import Path
+import sqlite3
+import traceback
+from datetime import datetime
+import threading
+import hashlib
+from functools import wraps
+import logging
+import re
+import glob
+from dotenv import load_dotenv
+
+# טעינת משתני סביבה מקובץ .env
+load_dotenv()
+
+# Check platform type
+import platform
+IS_WINDOWS = platform.system() == "Windows"
+
+# Import Windows-specific modules conditionally
+try:
+    if IS_WINDOWS:
+        import pyautogui
+        import win32api  # Part of pywin32 package
+        PYAUTOGUI_AVAILABLE = True
+        # Set a safety pause to give user time to take control if needed
+        pyautogui.PAUSE = 0.5
+    else:
+        PYAUTOGUI_AVAILABLE = False
+        logging.warning("PyAutoGUI functionality is only available on Windows. Some automation features will be disabled.")
+except ImportError as e:
+    PYAUTOGUI_AVAILABLE = False
+
+
+from flask import Flask, jsonify, request, send_from_directory, abort, make_response, render_template
+from flask_cors import CORS
+try:
+    from flask_socketio import SocketIO, emit, disconnect
+    SOCKETIO_AVAILABLE = True
+except ImportError:
+    print("Warning: flask_socketio not available. WebSocket functionality will be disabled.")
+    SOCKETIO_AVAILABLE = False
+    SocketIO = None
+    emit = None
+    disconnect = None
+
+# Import existing logic from your project
+from src.utils import load_system_config, save_system_config
+import socket
+
+# Global variables
+START_TIME = time.time()
+
+# Load system configuration
+try:
+    system_config = load_system_config()
+    # IB Gateway settings
+    IB_GATEWAY_PATH = os.path.dirname(system_config.get('ibkr_settings', {}).get('gateway_path', r"C:\Jts\ibgateway\1037\ibgateway.exe"))
+    API_PORT = int(os.environ.get('IB_PORT', system_config.get('ibkr_settings', {}).get('port', 4001)))
+except Exception as e:
+    logging.error(f"Failed to load system configuration: {str(e)}")
+    # Fallback values
+    IB_GATEWAY_PATH = r"C:\Jts\ibgateway\1037"
+    API_PORT = int(os.environ.get('IB_PORT', 4001))
+SESSION_AUTHENTICATED = False
+
+# --- Login Helper Class (replacement for login_recorder module) ---
+class LoginHelper:
+    """
+    תחליף למודול login_recorder שהועבר לארכיון.
+    מספק ממשק בסיסי לחיקוי הפונקציונליות הדרושה.
+    """
+    DEFAULT_RECORDING_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'recordings', 'login_sequence.json')
+    
+    @staticmethod
+    def start_login_recording():
+        """מתחיל הקלטת רצף התחברות - פונקציה ריקה כעת"""
+        logger.warning("Login recording functionality is deprecated and has been archived")
+        return False
+    
+    @staticmethod
+    def stop_login_recording():
+        """מפסיק הקלטת רצף התחברות - פונקציה ריקה כעת"""
+        logger.warning("Login recording functionality is deprecated and has been archived")
+        return False
+    
+    @staticmethod
+    def save_login_recording():
+        """שומר הקלטת רצף התחברות - פונקציה ריקה כעת"""
+        logger.warning("Login recording functionality is deprecated and has been archived")
+        return False
+    
+    @staticmethod
+    def run_login_macro():
+        """מריץ מאקרו התחברות - פונקציה ריקה כעת"""
+        logger.warning("Login macro functionality is deprecated and has been archived")
+        return False
+
+# דרך חלופית להתייחס למודול המקורי
+login_recorder = LoginHelper
+
+# Gateway Management Functions
+def check_port_open(host='localhost', port=API_PORT, timeout=3):
+    """בודק אם פורט פתוח"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
+
+def start_gateway_process(username, password, auto_fill=True):
+    """מפעיל את ה-Gateway ישירות ומזין את הנתונים אוטומטית"""
+    try:
+        # נתיב ל-Gateway
+        gateway_exe = os.path.join(IB_GATEWAY_PATH, "ibgateway.exe")
+        
+        if not os.path.exists(gateway_exe):
+            logger.error(f"Gateway not found at: {gateway_exe}")
+            return False, f"לא נמצא Gateway בנתיב: {gateway_exe}"
+        
+        # עדכון קובץ jts.ini עם הגדרות API
+        jts_ini_path = os.path.join(IB_GATEWAY_PATH, "jts.ini")
+        update_jts_ini(jts_ini_path, username, password)
+        
+        logger.info("Starting IB Gateway as external application...")
+        logger.info("⚠️ שים לב: מפעיל את יישום Gateway כיישום חיצוני נפרד")
+        
+        # סגור חלונות קודמים של Gateway (אופציונלי)
+        try:
+            import psutil
+            for proc in psutil.process_iter(['pid', 'name']):
+                if 'ibgateway' in proc.info['name'].lower():
+                    logger.info(f"Terminating existing Gateway process: {proc.info['pid']}")
+                    psutil.Process(proc.info['pid']).terminate()
+                    time.sleep(1)
+        except ImportError:
+            logger.warning("psutil not available, skipping process cleanup")
+        except Exception as proc_err:
+            logger.warning(f"Error cleaning up processes: {str(proc_err)}")
+        
+        # הפעלת Gateway
+        process = subprocess.Popen(
+            [gateway_exe],
+            cwd=IB_GATEWAY_PATH,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=subprocess.CREATE_NEW_CONSOLE  # חלון נפרד להתחברות
+        )
+        
+        # המתנה לטעינת Gateway
+        logger.info("Waiting for Gateway to load...")
+        load_time = 8  # המתנה בשניות
+        for i in range(load_time):
+            logger.info(f"Loading... {i+1}/{load_time}")
+            time.sleep(1)
+        
+        # בדיקה אם התהליך עדיין רץ
+        if process.poll() is None:
+            logger.info("Gateway process started successfully (still running)")
+            
+            # ניסיון להביא את החלון לקדמת המסך
+            try:
+                import win32gui
+                import win32con
+                
+                def find_gateway_window(hwnd, windows):
+                    if "IB Gateway" in win32gui.GetWindowText(hwnd) and win32gui.IsWindowVisible(hwnd):
+                        windows.append(hwnd)
+                    return True
+                
+                gateway_windows = []
+                win32gui.EnumWindows(find_gateway_window, gateway_windows)
+                
+                if gateway_windows:
+                    logger.info(f"Found {len(gateway_windows)} Gateway windows")
+                    # הפעל את החלון הראשון שנמצא
+                    hwnd = gateway_windows[0]
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                    win32gui.SetForegroundWindow(hwnd)
+                    logger.info("Gateway window activated")
+            except ImportError:
+                logger.warning("win32gui not available for window activation")
+            except Exception as win_err:
+                logger.warning(f"Error activating window: {str(win_err)}")
+            
+            # הזנת נתוני התחברות אוטומטית אם נבחרה
+            if auto_fill and PYAUTOGUI_AVAILABLE:
+                logger.info("Auto-fill is enabled, attempting to fill login data...")
+                time.sleep(2)  # המתנה נוספת לפני מילוי הפרטים
+                success = auto_fill_login_data(username, password)
+                if success:
+                    return True, "Gateway הופעל כיישום חיצוני. ניסיון למלא פרטי התחברות אוטומטית בוצע. בדוק את חלון ה-Gateway שנפתח."
+                else:
+                    return True, "Gateway הופעל כיישום חיצוני, אבל המילוי האוטומטי נכשל. יש צורך בהזנה ידנית בחלון ה-Gateway."
+            elif auto_fill and not PYAUTOGUI_AVAILABLE:
+                return True, "Gateway הופעל כיישום חיצוני (מילוי אוטומטי לא זמין - pyautogui לא מותקן). יש למלא פרטים ידנית בחלון ה-Gateway."
+            else:
+                return True, "Gateway הופעל כיישום חיצוני - יש להזין נתונים ידנית בחלון ה-Gateway שנפתח."
+        else:
+            stdout, stderr = process.communicate()
+            logger.error(f"Gateway failed to start: {stderr.decode()}")
+            return False, f"Gateway נכשל בהפעלה: {stderr.decode()}"
+            
+    except Exception as e:
+        logger.error(f"Error starting gateway: {str(e)}")
+        return False, f"שגיאה בהפעלת Gateway: {str(e)}"
+
+def auto_fill_login_data(username, password):
+    """מזין נתוני התחברות אוטומטית לחלון Gateway באמצעות שיטה ישירה"""
+    try:
+        if not PYAUTOGUI_AVAILABLE:
+            logger.warning("pyautogui not available for auto-fill")
+            return False
+            
+        # מאחר שיש לנו את המחלקה LoginHelper, נשתמש רק בשיטה הישירה
+        logger.info("Starting simplified Gateway login process...")
+        pyautogui.FAILSAFE = True
+        pyautogui.PAUSE = 1.0  # המתנה ארוכה יותר בין פעולות
+        
+        # המתנה לטעינת חלון Gateway
+        logger.info("Waiting for Gateway window to load...")
+        time.sleep(5)  # המתנה לטעינת החלון
+        # המתנה לטעינת חלון Gateway
+        logger.info("Waiting for Gateway window to load...")
+        time.sleep(5)  # המתנה לטעינת החלון
+        
+        # גישה פשוטה - ללא חיפוש חלון ספציפי
+        # קליק במרכז המסך להתמקדות
+        screen_width, screen_height = pyautogui.size()
+        center_x, center_y = screen_width // 2, screen_height // 2
+        
+        logger.info("Using direct simplified login method")
+        
+        # ודא שהמקלדת באנגלית
+        pyautogui.hotkey('alt', 'shift')
+        time.sleep(1)
+        
+        # קליק במרכז המסך להתמקדות
+        pyautogui.click(center_x, center_y)
+        time.sleep(1)
+        
+        # גישה ישירה - הקלדת שם משתמש ידועה מראש
+        logger.info(f"Direct typing of username: {username}")
+        # הקלד שם משתמש מקובץ .env
+        ibkr_username = os.getenv("IBKR_USERNAME")
+        pyautogui.write(ibkr_username, interval=0.25)
+        time.sleep(1)
+        
+        # Tab לשדה הבא
+        pyautogui.press('tab')
+        time.sleep(1)
+        
+        # הקלד סיסמה מקובץ .env
+        logger.info("Direct typing of password")
+        ibkr_password = os.getenv("IBKR_PASSWORD")
+        pyautogui.write(ibkr_password, interval=0.25)
+        time.sleep(1)
+        
+        # Enter להגשה
+        pyautogui.press('enter')
+        
+        logger.info("Login form submitted with direct typing")
+        return True
+            
+    except Exception as e:
+        logger.error(f"Critical error in auto_fill_login_data: {str(e)}")
+        return False
+        
+        if win32_available:
+            # מצא את חלון ה-Gateway לפי הכותרת שלו
+            def find_gateway_window(hwnd, windows):
+                if "IB Gateway" in win32gui.GetWindowText(hwnd) and win32gui.IsWindowVisible(hwnd):
+                    windows.append(hwnd)
+                return True
+            
+            gateway_windows = []
+            win32gui.EnumWindows(find_gateway_window, gateway_windows)
+            
+            if gateway_windows:
+                logger.info(f"Found {len(gateway_windows)} Gateway windows")
+                # הפעל את החלון הראשון שנמצא
+                hwnd = gateway_windows[0]
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                win32gui.SetForegroundWindow(hwnd)
+                time.sleep(1)  # המתן שהחלון יתמקד
+                logger.info("Gateway window activated")
+            else:
+                logger.warning("No Gateway window found by title, trying alternate methods")
+        
+        # נסה לאתר את הנקודה המרכזית של המסך ולהקליק שם
+        screen_width, screen_height = pyautogui.size()
+        center_x, center_y = screen_width // 2, screen_height // 2
+        logger.info(f"Clicking at screen center: {center_x}x{center_y}")
+        
+        # נסה להתמקד בחלון לפני הקלקה
+        pyautogui.click(center_x, center_y)
+        time.sleep(1)
+        
+        # מספר שיטות מילוי אוטומטי - ננסה כל אחת בתורה
+        methods = [
+            "Direct input with Tab navigation",
+            "Alt-Tab activation",
+            "Multiple Tab navigation",
+            "Slower typing method",
+            "Combined keyboard navigation"
+        ]
+        
+        # נסיונות חוזרים עם שיטות שונות
+        for i, method_name in enumerate(methods, 1):
+            try:
+                logger.info(f"Trying method {i}: {method_name}")
+                
+                # ודא שהמקלדת באנגלית בתחילת כל שיטה
+                pyautogui.hotkey('alt', 'shift')  # החלפת שפת מקלדת לאנגלית
+                time.sleep(1)
+                
+                if i == 1:
+                    # שיטה 1: שיטה מדויקת יותר עם מיקוד ברור על שדות
+                    # קליק במרכז המסך לוודא שהחלון במיקוד
+                    pyautogui.click(center_x, center_y)
+                    time.sleep(1)
+                    
+                    # נסה להקליק ספציפית על שדה שם משתמש - מעט מעל מרכז המסך
+                    username_y = center_y - 30
+                    pyautogui.click(center_x, username_y)
+                    time.sleep(1)
+                    
+                    # נקה את השדה
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.5)
+                    pyautogui.press('delete')
+                    time.sleep(0.5)
+                    
+                    # הקלד שם משתמש באמצעות clipboard - שיטה מהימנה יותר לתווים באנגלית
+                    logger.info(f"Typing username via clipboard: {username[:2]}***")
+                    
+                    # שימוש ב-clipboard להקלדה בטוחה יותר
+                    try:
+                        import pyperclip
+                        
+                        # שמירת התוכן המקורי של הקליפבורד
+                        original_clipboard = pyperclip.paste()
+                        
+                        # העתקת שם המשתמש לקליפבורד
+                        pyperclip.copy(username)
+                        time.sleep(0.5)
+                        
+                        # הדבקת שם המשתמש מהקליפבורד
+                        pyautogui.hotkey('ctrl', 'v')
+                        time.sleep(0.5)
+                        
+                        # החזרת התוכן המקורי לקליפבורד
+                        pyperclip.copy(original_clipboard)
+                        
+                    except ImportError:
+                        logger.warning("pyperclip not available, falling back to character typing")
+                        # אם אין גישה לקליפבורד, ננסה שיטה אחרת
+                        
+                        # כתיבת כל תו ב-username
+                        for char in username:
+                            if char.isdigit():
+                                # לספרות - שימוש רגיל
+                                pyautogui.press(char)
+                            else:
+                                # לאותיות - ננסה שיטה עם מקשים וירטואליים
+                                pyautogui.keyDown(char)
+                                time.sleep(0.1)
+                                pyautogui.keyUp(char)
+                            time.sleep(0.3)
+                    
+                    time.sleep(1)
+                    # עבור לשדה הסיסמה
+                    pyautogui.press('tab')
+                    time.sleep(1)
+                    
+                    # ודא שהתוכן נמחק
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.5)
+                    pyautogui.press('delete')
+                    time.sleep(0.5)
+                    
+                    # הקלד סיסמה תו-אחר-תו
+                    logger.info("Typing password character by character")
+                    for char in password:
+                        pyautogui.press(char)
+                        time.sleep(0.2)  # המתנה ארוכה יותר בין תווים
+                    
+                    time.sleep(0.5)
+                    pyautogui.press('enter')
+                    logger.info("Method 1 completed")
+                    
+                elif i == 2:
+                    # שיטה 2: שימוש ב-Alt+Tab להפעלת החלון
+                    logger.info("Using Alt+Tab to activate window")
+                    pyautogui.keyDown('alt')
+                    time.sleep(0.5)
+                    pyautogui.press('tab')
+                    time.sleep(0.5)
+                    pyautogui.keyUp('alt')
+                    time.sleep(1.5)  # המתנה ארוכה יותר
+                    
+                    # ניקוי שדה
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.5)
+                    pyautogui.press('delete')
+                    time.sleep(0.5)
+                    
+                    # הקלד שם משתמש באמצעות clipboard
+                    try:
+                        import pyperclip
+                        original_clipboard = pyperclip.paste()
+                        pyperclip.copy(username)
+                        time.sleep(0.5)
+                        pyautogui.hotkey('ctrl', 'v')
+                        time.sleep(0.5)
+                        pyperclip.copy(original_clipboard)
+                    except ImportError:
+                        # אם אין גישה לקליפבורד, ננסה להקליד אות אות עם תצורה אחרת
+                        for char in username:
+                            # שימוש בקומבינציה אחרת לאותיות
+                            if char.isalpha():
+                                # הקלדת אות גדולה
+                                if char.isupper():
+                                    pyautogui.keyDown('shift')
+                                    pyautogui.press(char.lower())
+                                    pyautogui.keyUp('shift')
+                                else:
+                                    pyautogui.press(char)
+                            else:
+                                pyautogui.press(char)
+                            time.sleep(0.3)
+                    
+                    time.sleep(0.8)
+                    pyautogui.press('tab')
+                    time.sleep(0.8)
+                    
+                    # ניקוי שדה סיסמה
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.5)
+                    pyautogui.press('delete')
+                    time.sleep(0.5)
+                    
+                    # הקלד סיסמה תו-אחר-תו
+                    for char in password:
+                        pyautogui.press(char)
+                        time.sleep(0.2)
+                    
+                    time.sleep(0.8)
+                    pyautogui.press('enter')
+                    logger.info("Method 2 completed")
+                
+                elif i == 3:
+                    # שיטה 3: ניווט עם Tab מרובה
+                    logger.info("Using multiple Tab navigation")
+                    pyautogui.click(center_x, center_y)
+                    time.sleep(0.5)
+                    
+                    # לחץ Tab מספר פעמים כדי להגיע לשדה המתאים
+                    for _ in range(4):
+                        pyautogui.press('tab')
+                        time.sleep(0.3)
+                    
+                    # ניקוי שדה
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.5)
+                    pyautogui.press('delete')
+                    time.sleep(0.5)
+                    
+                    # הקלד שם משתמש באמצעות clipboard - גם בשיטה 3
+                    try:
+                        import pyperclip
+                        original_clipboard = pyperclip.paste()
+                        pyperclip.copy(username)
+                        time.sleep(0.5)
+                        pyautogui.hotkey('ctrl', 'v')
+                        time.sleep(0.5)
+                        pyperclip.copy(original_clipboard)
+                    except ImportError:
+                        # אם אין גישה לקליפבורד, ננסה להקליד אות אות באופן מיוחד
+                        for char in username:
+                            # ניסיון מיוחד לאותיות באנגלית
+                            if char.isalpha():
+                                pyautogui.keyDown('alt')
+                                time.sleep(0.1)
+                                # קודי ASCII מיוחדים לאותיות
+                                if char.lower() == 'a': pyautogui.press(['9', '7'])
+                                elif char.lower() == 'b': pyautogui.press(['9', '8'])
+                                elif char.lower() == 'c': pyautogui.press(['9', '9'])
+                                elif char.lower() == 'p': pyautogui.press(['1', '1', '2'])
+                                elif char.lower() == 'q': pyautogui.press(['1', '1', '3'])
+                                elif char.lower() == 'v': pyautogui.press(['1', '1', '8'])
+                                else: pyautogui.press(char)
+                                pyautogui.keyUp('alt')
+                            else:
+                                pyautogui.press(char)
+                            time.sleep(0.3)
+                    
+                    time.sleep(0.8)
+                    pyautogui.press('tab')
+                    time.sleep(0.8)
+                    
+                    # ניקוי שדה סיסמה
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.5)
+                    pyautogui.press('delete')
+                    time.sleep(0.5)
+                    
+                    # הקלד סיסמה תו-אחר-תו עם המתנות ארוכות יותר
+                    for char in password:
+                        pyautogui.press(char)
+                        time.sleep(0.2)
+                    
+                    time.sleep(0.5)
+                    pyautogui.press('enter')
+                    logger.info("Method 3 completed")
+                
+                elif i == 4:
+                    # שיטה 4: הקלדה איטית יותר עם המתנות בין תווים
+                    logger.info("Using slower typing method")
+                    pyautogui.click(center_x, center_y)
+                    time.sleep(1)
+                    
+                    # ניסיון לחיצה על שדה שם משתמש
+                    pyautogui.click(center_x, center_y - 50)
+                    time.sleep(1)
+                    
+                    # ניקוי שדה
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.8)
+                    
+                    # הקלדה איטית במיוחד, תו-אחר-תו
+                    for char in username:
+                        pyautogui.typewrite(char)
+                        time.sleep(0.25)  # המתנה ארוכה מאוד בין תווים
+                    
+                    time.sleep(1)
+                    pyautogui.press('tab')
+                    time.sleep(1)
+                    
+                    # הקלדה איטית במיוחד, תו-אחר-תו
+                    for char in password:
+                        pyautogui.typewrite(char)
+                        time.sleep(0.25)  # המתנה ארוכה מאוד בין תווים
+                    
+                    time.sleep(1)
+                    pyautogui.press('enter')
+                    logger.info("Method 4 completed")
+                
+                elif i == 5:
+                    # שיטה 5: שילוב ניווט מקלדת וניקוי שדות
+                    logger.info("Using combined keyboard navigation")
+                    pyautogui.click(center_x, center_y)
+                    time.sleep(1)
+                    
+                    # ניווט לראש הטופס
+                    pyautogui.hotkey('ctrl', 'home')
+                    time.sleep(0.5)
+                    
+                    # מעבר לשדה הראשון עם Tab
+                    for _ in range(3):
+                        pyautogui.press('tab')
+                        time.sleep(0.3)
+                    
+                    # ניקוי שדה
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.5)
+                    
+                    # הקלדה תו-אחר-תו
+                    for char in username:
+                        pyautogui.typewrite(char)
+                        time.sleep(0.2)
+                    
+                    time.sleep(0.5)
+                    pyautogui.press('tab')
+                    time.sleep(0.5)
+                    
+                    # ניקוי שדה
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.5)
+                    
+                    # הקלדה תו-אחר-תו
+                    for char in password:
+                        pyautogui.typewrite(char)
+                        time.sleep(0.2)
+                    
+                    time.sleep(0.5)
+                    pyautogui.press('enter')
+                    logger.info("Method 5 completed")
+                
+                # המתנה לראות אם הצלחנו
+                time.sleep(2)
+                
+                return True
+                
+            except Exception as method_error:
+                logger.warning(f"Method {i} failed: {str(method_error)}")
+                if i < len(methods):
+                    logger.info("Trying next method...")
+                    time.sleep(1)
+                else:
+                    logger.error("All methods failed")
+                    return False
+        
+        logger.info("Auto-fill attempt completed")
+        return True
+            
+    except Exception as e:
+        logger.error(f"Critical error in auto_fill_login_data: {str(e)}")
+        return False
+        
+        # ניסיון לזהות תהליכי Gateway
+        try:
+            import psutil
+            gateway_processes = []
+            for proc in psutil.process_iter(['pid', 'name', 'exe']):
+                if proc.info['name'] and 'ibgateway' in proc.info['name'].lower():
+                    gateway_processes.append(proc.info)
+            logger.info(f"Found {len(gateway_processes)} Gateway processes running")
+        except Exception as e:
+            logger.info(f"Could not enumerate processes: {str(e)}")
+        
+        # מספר שיטות למילוי אוטומטי - נסה כל אחת עד שתעבד
+        methods = [
+            ("Focus window + type", 1),
+            ("Alt-Tab navigation", 2),
+            ("Center click method", 3), 
+            ("Multiple tab navigation", 4),
+            ("Brute force typing", 5)
+        ]
+        
+        for method_name, method_num in methods:
+            try:
+                logger.info(f"Attempting method {method_num}: {method_name}")
+                
+                if method_num == 1:
+                    # שיטה 1: נסה להשיג פוקוס על חלון
+                    # לחץ במרכז המסך תחילה
+                    pyautogui.click(screen_width // 2, screen_height // 2)
+                    time.sleep(1)
+                    
+                    # נקה שדה קלט
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.5)
+                    
+                    # הזן שם משתמש - הקלד כל תו בנפרד עם המתנה
+                    logger.info(f"Typing username: {username[:3]}***")
+                    for char in username:
+                        pyautogui.typewrite(char)
+                        time.sleep(0.1)
+                    time.sleep(0.8)
+                    
+                    # עבור לשדה סיסמה
+                    pyautogui.press('tab')
+                    time.sleep(0.8)
+                    
+                    # נקה ותזין סיסמה - הקלד כל תו בנפרד
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.3)
+                    logger.info("Typing password...")
+                    for char in password:
+                        pyautogui.typewrite(char)
+                        time.sleep(0.1)
+                    time.sleep(0.8)
+                    
+                    # הגש טופס
+                    pyautogui.press('enter')
+                    time.sleep(1)
+                    
+                elif method_num == 2:
+                    # שיטה 2: Alt-Tab לחלון הנכון
+                    pyautogui.hotkey('alt', 'tab')
+                    time.sleep(1)
+                    
+                    # לחץ במרכז החלון
+                    pyautogui.click(screen_width // 2, screen_height // 2)
+                    time.sleep(0.5)
+                    
+                    # נקה ותזין
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.5)
+                    # הקלד שם משתמש תו-אחר-תו
+                    for char in username:
+                        pyautogui.typewrite(char)
+                        time.sleep(0.1)
+                    pyautogui.press('tab')
+                    time.sleep(0.5)
+                    # הקלד סיסמה תו-אחר-תו
+                    for char in password:
+                        pyautogui.typewrite(char)
+                        time.sleep(0.1)
+                    pyautogui.press('enter')
+                    
+                elif method_num == 3:
+                    # שיטה 3: לחיצה במרכז המסך
+                    # לחץ מספר פעמים במרכז המסך לוודא שהחלון מקבל פוקוס
+                    for _ in range(3):
+                        pyautogui.click(screen_width // 2, screen_height // 2)
+                        time.sleep(0.3)
+                    
+                    time.sleep(1)
+                    
+                    # מחק כל תוכן בשדה נוכחי
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.5)
+                    
+                    # הקלד שם משתמש
+                    pyautogui.typewrite(username, interval=0.15)
+                    time.sleep(0.5)
+                    
+                    # לחץ Tab לשדה הבא
+                    pyautogui.press('tab')
+                    time.sleep(0.5)
+                    
+                    # מחק תוכן קודם
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.5)
+                    
+                    # הקלד סיסמה - שימוש בשיטה מיוחדת לטיפול בבעיות שפה
+                    # בדיקה שהמקלדת באנגלית
+                    pyautogui.hotkey('alt', 'shift')  # החלפת שפת מקלדת לאנגלית
+                    time.sleep(0.5)
+                    
+                    # הקלדת הסיסמה תו אחר תו
+                    logger.info("Typing password character by character")
+                    for char in password:
+                        # שימוש בפונקציה המיוחדת press במקום typewrite
+                        pyautogui.press(char)
+                        time.sleep(0.2)  # המתנה ארוכה יותר בין תווים
+                    
+                    time.sleep(0.5)
+                    
+                    # לחץ Enter להגשה
+                    pyautogui.press('enter')
+                    
+                elif method_num == 4:
+                    # שיטה 4: ניווט מרובה עם Tab
+                    for tab_count in [3, 5, 8]:
+                        # נסה כמה אפשרויות של מספר Tabs שצריך ללחוץ
+                        pyautogui.click(screen_width // 2, screen_height // 2)
+                        time.sleep(0.5)
+                        
+                        # לחץ Tab מספר פעמים לנסות להגיע לשדה המתאים
+                        for _ in range(tab_count):
+                            pyautogui.press('tab')
+                            time.sleep(0.2)
+                        
+                        # נסה להקליד
+                        pyautogui.typewrite(username, interval=0.1)
+                        pyautogui.press('tab')
+                        time.sleep(0.5)
+                        
+                        # הקלדת הסיסמה תו אחר תו
+                        pyautogui.hotkey('alt', 'shift')  # החלפת שפת מקלדת לאנגלית
+                        time.sleep(0.5)
+                        for char in password:
+                            pyautogui.press(char)
+                            time.sleep(0.2)
+                            
+                        pyautogui.press('enter')
+                        time.sleep(2)
+                        break  # נסה רק פעם אחת
+                        
+                elif method_num == 5:
+                    # שיטה 5: הקלדה גסה עם המתנות ארוכות
+                    # נסיון להתמקד בחלון
+                    pyautogui.press('escape')  # לפעמים עוזר להתמקד
+                    time.sleep(0.5)
+                    pyautogui.press('tab')
+                    time.sleep(0.5)
+                    
+                    # הקלד לאט ובמפורש
+                    time.sleep(1)
+                    pyautogui.typewrite(username, interval=0.25)
+                    time.sleep(1.5)
+                    pyautogui.press('tab')
+                    time.sleep(1.5)
+                    
+                    # הקלדת הסיסמה תו אחר תו
+                    pyautogui.hotkey('alt', 'shift')  # החלפת שפת מקלדת לאנגלית
+                    time.sleep(0.5)
+                    logger.info("Typing password character by character (method 5)")
+                    for char in password:
+                        pyautogui.press(char)
+                        time.sleep(0.3)  # המתנה ארוכה יותר בין תווים
+                    
+                    time.sleep(1.5)
+                    pyautogui.press('enter')
+                
+                logger.info(f"Method {method_num} ({method_name}) completed")
+                time.sleep(3)  # המתנה לתגובה
+                
+                # אם הגענו לכאן, השיטה הושלמה בהצלחה
+                logger.info("Auto-fill completed successfully")
+                return True
+                
+            except Exception as method_error:
+                logger.warning(f"Method {method_num} failed: {str(method_error)}")
+                if method_num < len(methods):
+                    logger.info("Trying next method...")
+                    time.sleep(2)
+                    continue
+                else:
+                    logger.error("All auto-fill methods exhausted")
+                    return False
+        
+        logger.info("Auto-fill process completed")
+        return True
+            
+    except Exception as e:
+        logger.error(f"Critical error in auto_fill_login_data: {str(e)}")
+        return False
+
+def update_jts_ini(jts_path, username, password):
+    """עדכון קובץ jts.ini עם הגדרות API ונתוני התחברות"""
+    try:
+        config_content = f"""[IBGateway]
+ApiOnly=true
+LocalServerPort={API_PORT}
+RemoteHostsFile=
+RemotePortsFile=
+TrustedIPs=127.0.0.1
+SocketPort={API_PORT}
+UseRemoteSettings=false
+OverrideTrustedIPs=false
+ReadOnlyApi=false
+
+[API]
+SocketPort={API_PORT}
+UseCtrlC=true
+AcceptIncomingConnectionAction=accept
+AllowOriginsWithHttps=false
+AllowedOriginsPatterns=
+CrossOriginError=false
+MasterClientID=0
+ReadOnlyApi=false
+
+[Logon]
+Userid={username}
+UseSSL=true
+DisplayedProxyAddress=
+DisplayedProxyPort=
+StorePasswordHash=true
+"""
+        
+        with open(jts_path, 'w', encoding='utf-8') as f:
+            f.write(config_content)
+            
+        logger.info(f"Updated jts.ini with API settings on port {API_PORT}")
+        
+    except Exception as e:
+        logger.error(f"Error updating jts.ini: {str(e)}")
+
+def check_gateway_status():
+    """בודק סטטוס Gateway"""
+    if check_port_open(port=API_PORT):
+        return "פעיל - API Port זמין"
+    else:
+        return "לא פעיל"
+
+def authenticate_user(username, password):
+    """אימות משתמש פשוט - כאן תוכל להוסיף לוגיקה מתקדמת יותר"""
+    global SESSION_AUTHENTICATED
+    # כרגע אני מקבל כל משתמש, אבל תוכל להוסיף בדיקות
+    if username and password:
+        SESSION_AUTHENTICATED = True
+        return True
+    return False
+
+# --- Helper Functions ---
+def load_training_summaries():
+    """Load training summaries from various sources (moved from dashboard.py)"""
+    try:
+        models_dir = Path('models')
+        results_dir = Path('reports/backtest_results')
+        
+        # Load all training summaries from models directory
+        summaries = []
+        
+        # Check for training_summary.json files
+        for summary_file in models_dir.glob('**/training_summary.json'):
+            try:
+                with open(summary_file, 'r', encoding='utf-8') as f:
+                    summary = json.load(f)
+                    # Add file timestamp from filename
+                    summary['file_ts'] = summary_file.parent.name if summary_file.parent.name != 'models' else 'latest'
+                    summaries.append(summary)
+            except Exception as e:
+                print(f"Error loading {summary_file}: {e}")
+                continue
+        
+        # Also check for individual model config files
+        for config_file in models_dir.glob('**/candidate_model_config_*.json'):
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    # Extract timestamp from filename
+                    ts = config_file.name.replace('candidate_model_config_', '').replace('.json', '')
+                    config['file_ts'] = ts
+                    summaries.append(config)
+            except Exception as e:
+                print(f"Error loading {config_file}: {e}")
+                continue
+        
+        # Convert to DataFrame
+        if summaries:
+            df = pd.DataFrame(summaries)
+            # Sort by timestamp if available
+            if 'timestamp' in df.columns:
+                df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+                df = df.sort_values('timestamp', ascending=False)
+            return df
+        else:
+            return pd.DataFrame()
+            
+    except Exception as e:
+        print(f"Error loading training summaries: {e}")
+        return pd.DataFrame()
+
+# --- Professional Caching System ---
+class SmartCache:
+    """Advanced caching system with TTL and change detection"""
+    
+    def __init__(self):
+        self.cache = {}
+        self.timestamps = {}
+        self.hashes = {}
+        self.ttl = {}
+        self.default_ttl = 60  # 60 seconds default
+        
+    def get(self, key, ttl=None):
+        """Get cached value if still valid"""
+        if key not in self.cache:
+            return None
+            
+        current_time = time.time()
+        cache_ttl = ttl or self.ttl.get(key, self.default_ttl)
+        
+        # Check if cache is still valid
+        if current_time - self.timestamps.get(key, 0) < cache_ttl:
+            return self.cache[key]
+            
+        # Cache expired, remove it
+        self.invalidate(key)
+        return None
+        
+    def set(self, key, value, ttl=None):
+        """Set cached value with optional TTL"""
+        self.cache[key] = value
+        self.timestamps[key] = time.time()
+        self.ttl[key] = ttl or self.default_ttl
+        
+        # Store hash for change detection
+        self.hashes[key] = hashlib.md5(str(value).encode()).hexdigest()
+        
+    def invalidate(self, key):
+        """Remove cached value"""
+        self.cache.pop(key, None)
+        self.timestamps.pop(key, None)
+        self.hashes.pop(key, None)
+        self.ttl.pop(key, None)
+        
+    def has_changed(self, key, new_value):
+        """Check if value has changed since last cache"""
+        if key not in self.hashes:
+            return True
+        new_hash = hashlib.md5(str(new_value).encode()).hexdigest()
+        return new_hash != self.hashes[key]
+        
+    def clear(self):
+        """Clear all cache"""
+        self.cache.clear()
+        self.timestamps.clear()
+        self.hashes.clear()
+        self.ttl.clear()
+
+# Global cache instance
+cache = SmartCache()
+
+# --- WebSocket Event Manager ---
+class WebSocketManager:
+    """Manages WebSocket connections and broadcasts"""
+    
+    def __init__(self):
+        self.clients = set()
+        self.last_broadcast = {}
+        
+    def add_client(self, sid):
+        """Add a WebSocket client"""
+        self.clients.add(sid)
+        print(f"WebSocket client connected: {sid}")
+        
+    def remove_client(self, sid):
+        """Remove a WebSocket client"""
+        self.clients.discard(sid)
+        print(f"WebSocket client disconnected: {sid}")
+        
+    def broadcast(self, event, data):
+        """Broadcast data to all connected clients, only if changed"""
+        data_key = f"{event}_data"
+        
+        # Check if data has changed
+        if not cache.has_changed(data_key, data):
+            # print(f"No change in {event}, skipping broadcast")  # Debug
+            return  # No change, don't broadcast
+            
+        # Store new data in cache
+        cache.set(data_key, data, ttl=30)
+        
+        # Broadcast to all clients (only if SocketIO is available)
+        if self.clients and SOCKETIO_AVAILABLE and socketio:
+            socketio.emit(event, data)
+            print(f"Broadcasted {event} to {len(self.clients)} clients (data changed)")
+        else:
+            print(f"No clients connected or SocketIO not available for {event}")
+            
+    def get_client_count(self):
+        """Get number of connected clients"""
+        return len(self.clients)
+
+# Global WebSocket manager
+ws_manager = WebSocketManager()
+
+# --- Global State ---
+# A dictionary to keep track of running subprocesses
+processes = {
+    "model_api": None,
+    "trading_agent": None,
+    "main_trainer": None,
+    "backtester": None,
+    "data_collector": None,
+    "preprocessor": None,
+    "feature_engineering": None,
+    "run_all": None,
+}
+
+# --- Flask App Initialization ---
+app = Flask(__name__, static_folder='.', static_url_path='')
+app.config['SECRET_KEY'] = 'your-secret-key-here'
+CORS(app, cors_allowed_origins="*")  # Enable Cross-Origin Resource Sharing
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize SocketIO if available
+if SOCKETIO_AVAILABLE:
+    # Use eventlet async_mode if available, otherwise fall back to threading
+    if EVENTLET_AVAILABLE:
+        socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+        print("SocketIO initialized with eventlet async mode")
+    else:
+        socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+        print("SocketIO initialized with threading async mode")
+else:
+    socketio = None
+
+# --- Decorators ---
+def cached_endpoint(ttl=60):
+    """Decorator for caching API endpoints"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Create cache key from function name and arguments
+            cache_key = f"{func.__name__}_{hash(str(args) + str(kwargs))}"
+            
+            # Try to get from cache
+            cached_result = cache.get(cache_key, ttl)
+            if cached_result is not None:
+                return cached_result
+                
+            # Execute function and cache result
+            result = func(*args, **kwargs)
+            cache.set(cache_key, result, ttl)
+            return result
+        return wrapper
+    return decorator
+
+def get_process_status(name):
+    """Checks the status of a managed subprocess."""
+    proc = processes.get(name)
+    if not proc:
+        return {"status": "not_started", "pid": None}
+    
+    # Check if this is an error state placeholder
+    if isinstance(proc, dict) and "error_info" in proc:
+        # Check if error state has expired (after 5 minutes)
+        if time.time() - proc.get("error_time", 0) > 300:
+            processes[name] = None
+            return {"status": "not_started", "pid": None}
+        return proc["error_info"]
+    
+    # Check if process ID still exists in system
+    try:
+        import psutil
+        if not psutil.pid_exists(proc.pid):
+            # Process disappeared without proper termination
+            processes[name] = None
+            return {"status": "not_started", "pid": None}
+    except (ImportError, Exception) as e:
+        # If psutil not available, continue with standard check
+        pass
+    
+    poll_result = proc.poll()
+    if poll_result is None:
+        return {"status": "running", "pid": proc.pid}
+    else:
+        # Process finished, check for any output if possible
+        stdout = stderr = ""
+        if hasattr(proc, 'stdout') and proc.stdout:
+            try:
+                stdout = proc.stdout.read() if proc.stdout else ""
+            except:
+                stdout = ""
+                
+        if hasattr(proc, 'stderr') and proc.stderr:
+            try:
+                stderr = proc.stderr.read() if proc.stderr else ""
+            except:
+                stderr = ""
+        
+        # Check log file for errors if available
+        log_files = {
+            "data_collector": "logs/data_collector.log",
+            "main_trainer": "logs/main_trainer_output.log",
+            "backtester": "logs/backtester_output.log",
+            "preprocessor": "logs/preprocessor.log",
+            "feature_engineering": "logs/feature_engineering.log"
+        }
+        
+        log_error = None
+        if name in log_files and os.path.exists(log_files[name]):
+            try:
+                # Read last 10 lines from log file to check for errors
+                with open(log_files[name], 'r', encoding='utf-8') as f:
+                    last_lines = f.readlines()[-10:]
+                    for line in reversed(last_lines):
+                        if '[ERROR]' in line:
+                            log_error = line.strip()
+                            break
+            except Exception:
+                pass
+                
+        # Process finished, store status but don't clear it immediately
+        # This allows the UI to show error state
+        status_info = {
+            "status": "error" if poll_result != 0 or log_error else "finished", 
+            "pid": proc.pid, 
+            "return_code": poll_result,
+            "success": poll_result == 0 and not log_error
+        }
+        
+        # Add error details if the process failed
+        if poll_result != 0:
+            status_info["error"] = True
+            if stderr:
+                status_info["stderr"] = stderr.strip()
+            if stdout:
+                status_info["stdout"] = stdout.strip()
+                
+        # Add log error if found
+        if log_error:
+            status_info["error"] = True
+            status_info["log_error"] = log_error
+            
+        # For errors, we'll keep the process in the dictionary with error status
+        # for a while so the UI can display it
+        if status_info["status"] == "error":
+            # Create a special process object that just holds the error state
+            processes[name] = {
+                "error_info": status_info,
+                "error_time": time.time()
+            }
+        else:
+            # For successful completions, clear the process
+            processes[name] = None
+        
+        return status_info
+
+# --- WebSocket Events ---
+if SOCKETIO_AVAILABLE:
+    @socketio.on('connect')
+    def handle_connect():
+        """Handle client connection"""
+        ws_manager.add_client(request.sid)
+        
+        # Send initial data to new client
+        emit('status_update', get_all_statuses_data())
+        emit('system_info', get_system_info_data())
+        
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        """Handle client disconnection"""
+        ws_manager.remove_client(request.sid)
+
+    @socketio.on('request_update')
+    def handle_request_update(data):
+        """Handle manual update request from client"""
+        update_type = data.get('type', 'all')
+        
+        if update_type == 'status' or update_type == 'all':
+            emit('status_update', get_all_statuses_data())
+        if update_type == 'system_info' or update_type == 'all':
+            emit('system_info', get_system_info_data())
+        if update_type == 'position' or update_type == 'all':
+            emit('position_update', get_agent_position_data())
+
+# --- Background Tasks ---
+def background_monitor():
+    """Background task to monitor system changes and broadcast updates"""
+    if not SOCKETIO_AVAILABLE:
+        print("Background monitoring disabled - WebSocket not available")
+        return
+    
+    # Dictionary to keep track of process start times
+    process_start_times = {}
+    process_timeouts = {
+        "main_trainer": 1800,        # 30 דקות
+        "backtester": 1800,          # 30 דקות
+        "data_collector": 900,       # 15 דקות
+        "preprocessor": 600,         # 10 דקות
+        "feature_engineering": 1200, # 20 דקות
+        "run_all": 3600,             # שעה
+        "trading_agent": 86400,      # 24 שעות - אין להפסיק את הסוכן
+        "model_api": 86400           # 24 שעות - אין להפסיק את ה-API של המודל
+    }
+    
+    # בדיקת פעילות לפי קבצי לוג
+    log_file_map = {
+        "main_trainer": "logs/main_trainer_output.log",
+        "backtester": "logs/backtester_output.log",
+        "data_collector": "logs/data_collector.log",
+        "preprocessor": "logs/preprocessing.log",
+        "feature_engineering": "logs/all_features_computed.log",
+    }
+    
+    # Dictionary to store the last modified time of log files
+    log_last_modified = {}
+        
+    while True:
+        try:
+            # Check for status changes
+            status_data = get_all_statuses_data()
+            
+            # Check for stuck processes and manage timeouts
+            current_time = time.time()
+            for name, status in status_data.items():
+                # If process is running
+                if status["status"] == "running":
+                    # Store start time if not already tracked
+                    if name not in process_start_times:
+                        process_start_times[name] = current_time
+                        print(f"Started tracking {name} process at {datetime.fromtimestamp(current_time)}")
+                    
+                    # בדיקה האם קובץ הלוג של התהליך מתעדכן
+                    if name in log_file_map and os.path.exists(log_file_map[name]):
+                        log_file = log_file_map[name]
+                        current_log_mtime = os.path.getmtime(log_file)
+                        
+                        # בדיקה האם התהליך הסתיים לפי הלוג
+                        try:
+                            with open(log_file, 'r', encoding='utf-8') as f:
+                                last_lines = ''.join(f.readlines()[-10:])  # 10 שורות אחרונות
+                                if "finished successfully" in last_lines or "Training pipeline finished" in last_lines:
+                                    print(f"Process '{name}' seems to have finished based on log file")
+                                    # התהליך הסתיים - נסה לסיים אותו
+                                    proc = processes[name]
+                                    if proc:
+                                        try:
+                                            proc.terminate()
+                                            processes[name] = None
+                                            del process_start_times[name]
+                                            print(f"Process '{name}' terminated after detecting completion in log")
+                                            continue  # המשך ללולאה הבאה
+                                        except Exception as e:
+                                            print(f"Error terminating process '{name}': {e}")
+                        except Exception as e:
+                            print(f"Error checking log file for '{name}': {e}")
+                    
+                    # Check if process exceeded its timeout
+                    elapsed_time = current_time - process_start_times[name]
+                    timeout = process_timeouts.get(name, 1800)  # Default 30 minutes
+                    
+                    if elapsed_time > timeout:
+                        print(f"Process '{name}' (PID: {status['pid']}) timed out after {elapsed_time:.1f} seconds")
+                        
+                        # Try to terminate process
+                        try:
+                            proc = processes[name]
+                            if proc and proc.poll() is None:
+                                print(f"Terminating stuck process '{name}' (PID: {proc.pid})")
+                                proc.terminate()
+                                try:
+                                    proc.wait(timeout=5)
+                                except subprocess.TimeoutExpired:
+                                    print(f"Force killing stuck process '{name}' (PID: {proc.pid})")
+                                    proc.kill()
+                                    
+                                processes[name] = None
+                                del process_start_times[name]
+                                print(f"Process '{name}' has been terminated due to timeout")
+                        except Exception as e:
+                            print(f"Error terminating process '{name}': {e}")
+                else:
+                    # Process is not running, remove from tracking
+                    if name in process_start_times:
+                        del process_start_times[name]
+            
+            ws_manager.broadcast('status_update', status_data)
+            
+            # Check for system info changes
+            system_info = get_system_info_data()
+            ws_manager.broadcast('system_info', system_info)
+            
+            # Check for position changes
+            position_data = get_agent_position_data()
+            ws_manager.broadcast('position_update', position_data)
+            
+            # Sleep for monitoring interval
+            time.sleep(10)  # Check every 10 seconds
+            
+        except Exception as e:
+            print(f"Background monitor error: {e}")
+            time.sleep(30)  # Wait longer on error
+
+# --- Helper Functions for Data Retrieval ---
+def get_all_statuses_data():
+    """Get all process statuses (cached)"""
+    return {name: get_process_status(name) for name in processes.keys()}
+
+def get_system_info_data():
+    """Get system information (cached) - same format as HTTP API"""
+    try:
+        try:
+            import psutil
+            import os
+            import platform
+            
+            # Get system information
+            memory = psutil.virtual_memory()
+            
+            # Get disk information
+            try:
+                # Try Windows C: drive first, then fallback to root
+                disk = psutil.disk_usage('C:' if os.name == 'nt' else '/')
+            except:
+                disk = psutil.disk_usage('/')
+            
+            # Get system uptime
+            uptime_seconds = int(time.time() - psutil.boot_time())
+            
+            # Create the info object with all system details
+            info = {
+                'config_loaded': True,
+                'timestamp': datetime.now().isoformat(),
+                'processes_count': len([p for p in processes.values() if p is not None]),
+                'cache_size': len(cache.cache),
+                'connected_clients': ws_manager.get_client_count(),
+                'os': {
+                    'system': platform.system(),
+                    'release': platform.release(),
+                    'version': platform.version(),
+                    'machine': platform.machine(),
+                    'processor': platform.processor()
+                },
+                'cpu': {
+                    'physical_cores': psutil.cpu_count(logical=False),
+                    'total_cores': psutil.cpu_count(logical=True),
+                    'usage_percent': psutil.cpu_percent(interval=0.5),
+                    'frequency': {
+                        'current': psutil.cpu_freq().current if psutil.cpu_freq() else None,
+                        'min': psutil.cpu_freq().min if psutil.cpu_freq() else None,
+                        'max': psutil.cpu_freq().max if psutil.cpu_freq() else None
+                    }
+                },
+                'memory': {
+                    'total': memory.total,
+                    'available': memory.available,
+                    'used': memory.used,
+                    'total_gb': round(memory.total / (1024**3), 2),
+                    'available_gb': round(memory.available / (1024**3), 2),
+                    'used_gb': round(memory.used / (1024**3), 2),
+                    'percent': memory.percent
+                },
+                'disk': {
+                    'total': disk.total,
+                    'free': disk.free,
+                    'used': disk.used,
+                    'total_gb': round(disk.total / (1024**3), 2),
+                    'free_gb': round(disk.free / (1024**3), 2),
+                    'used_gb': round(disk.used / (1024**3), 2),
+                    'percent': disk.percent
+                },
+                'uptime': {
+                    'seconds': uptime_seconds,
+                    'formatted': f"{uptime_seconds // 86400}d {(uptime_seconds % 86400) // 3600}h {(uptime_seconds % 3600) // 60}m {uptime_seconds % 60}s"
+                }
+            }
+            return info
+            
+        except ImportError:
+            # psutil not installed
+            import platform
+            info = {
+                'error': 'psutil not installed',
+                'message': 'מודול psutil לא מותקן. התקן אותו באמצעות \'pip install psutil\'',
+                'timestamp': datetime.now().isoformat(),
+                'os': {
+                    'system': platform.system(),
+                    'release': platform.release(),
+                    'version': platform.version(),
+                    'machine': platform.machine(),
+                    'processor': platform.processor()
+                }
+            }
+            return info
+    except Exception as e:
+        return {'error': str(e), 'timestamp': datetime.now().isoformat()}
+
+def get_agent_position_data():
+    """Get agent position data (cached)"""
+    try:
+        # Try to read from agent state
+        state_file = Path('agent/state.json')
+        if state_file.exists():
+            with open(state_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+                return {
+                    'position': state.get('position', 'none'),
+                    'symbol': state.get('symbol', '-'),
+                    'size': state.get('size', '-'),
+                    'entry_time': state.get('entry_time', '-'),
+                    'timestamp': datetime.now().isoformat()
+                }
+        return {'position': 'none', 'timestamp': datetime.now().isoformat()}
+
+    except Exception as e:
+        pass  # נוספה פקודת pass כדי למנוע IndentationError
+
+# --- API Endpoints ---
+
+@app.route('/public/<path:filename>')
+def serve_public(filename):
+    """Serves files from the public directory."""
+    return send_from_directory('public', filename)
+
+@app.route('/')
+def serve_dashboard():
+    """Serves the main dashboard.html file or login page if not authenticated."""
+    global SESSION_AUTHENTICATED
+    
+    # אם לא מאומת, הפנה לדף כניסה
+    if not SESSION_AUTHENTICATED:
+        return send_from_directory('.', 'gateway_login.html')
+    
+    # אם מאומת, הצג את הדשבורד
+    return send_from_directory('.', 'dashboard.html')
+
+# --- Gateway Management Routes ---
+
+@app.route('/login')
+def login_page():
+    """דף כניסה למערכת"""
+    return send_from_directory('.', 'gateway_login.html')
+
+@app.route('/api/gateway/test-autofill', methods=['POST'])
+def test_autofill():
+    """API לבדיקת פונקציית המילוי האוטומטי"""
+    try:
+        data = request.get_json()
+        username = data.get('username', 'testuser')
+        password = data.get('password', 'testpass')
+        
+        logger.info("Testing auto-fill functionality...")
+        logger.info("⚠️ זהירות: המילוי האוטומטי ינסה למלא נתונים בחלון Gateway ולא בדפדפן!")
+        
+        # הודעה למשתמש שיש לחפש חלון חדש שנפתח
+        response = jsonify({
+            'success': True,
+            'message': 'פותח חלון בדיקה - יש לחפש חלון ההתחברות שנפתח'
+        })
+        response.headers['Cache-Control'] = 'no-cache'
+        
+        # שליחת התגובה לפני הפעלת הבדיקה כדי שהממשק יתעדכן
+        threading.Thread(target=lambda: auto_fill_login_data(username, password)).start()
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error in test_autofill: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'שגיאה בבדיקה: {str(e)}'
+        })
+
+@app.route('/api/gateway/login', methods=['POST'])
+def gateway_login():
+    """API לכניסה והפעלת Gateway"""
+    global SESSION_AUTHENTICATED
+    
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        auto_fill = data.get('autoFill', True)  # ברירת מחדל True
+        record_macro = data.get('recordMacro', False)  # האם להקליט מאקרו
+        use_macro = data.get('useMacro', False)  # האם להשתמש במאקרו מוקלט
+        
+        if not username or not password:
+            return jsonify({
+                'success': False,
+                'message': 'יש למלא שם משתמש וסיסמה'
+            })
+        
+        # אימות משתמש
+        if not authenticate_user(username, password):
+            return jsonify({
+                'success': False,
+                'message': 'שם משתמש או סיסמה שגויים'
+            })
+        
+        # בדיקה אם Gateway כבר פועל
+        if check_port_open(port=API_PORT):
+            return jsonify({
+                'success': True,
+                'message': 'התחברת בהצלחה - Gateway כבר פועל ומחובר'
+            })
+        
+        # אם נתבקש להקליט מאקרו
+        if record_macro:
+            try:
+                # Using the LoginHelper class instead of importing login_recorder
+                logger.info("Starting macro recording mode")
+                
+                # הפעלת Gateway במצב הקלטה (ללא מילוי אוטומטי)
+                success, message = start_gateway_process(username, password, auto_fill=False)
+                
+                if success:
+                    # התחל הקלטה רק אחרי הפעלת ה-Gateway
+                    time.sleep(2)  # תן לחלון ה-Gateway זמן להיפתח
+                    login_recorder.start_login_recording()
+                    
+                    SESSION_AUTHENTICATED = True
+                    message = "מצב הקלטת מאקרו הופעל. אנא בצע את הפעולות הבאות: 1) העתק את שם המשתמש מהשדה בדף זה 2) הדבק אותו בחלון Gateway 3) העתק את הסיסמה מהשדה בדף זה 4) הדבק אותה בחלון Gateway 5) אשר את ההתחברות 6) לחץ על 'סיום הקלטה'"
+                
+                return jsonify({
+                    'success': success,
+                    'message': message,
+                    'recording': True,
+                    'username': username,  # החזר את שם המשתמש כדי להציג אותו בדף הכניסה
+                    'password': password   # החזר את הסיסמה כדי להציג אותה בדף הכניסה
+                })
+            except ImportError:
+                logger.warning("login_recorder module not available")
+                # המשך לגישה הרגילה
+        
+        # אם נתבקש להשתמש במאקרו קיים
+        if use_macro:
+            try:
+                # Using the LoginHelper class instead of importing login_recorder
+                import os
+                
+                if not os.path.exists(LoginHelper.DEFAULT_RECORDING_PATH):
+                    return jsonify({
+                        'success': False,
+                        'message': 'לא נמצא מאקרו מוקלט. אנא הקלט מאקרו חדש.'
+                    })
+                
+                # הפעלת Gateway ללא מילוי אוטומטי (המאקרו יטפל בזה)
+                success, message = start_gateway_process(username, password, auto_fill=False)
+                
+                if success:
+                    # הפעל את המאקרו המוקלט
+                    logger.info("Using recorded login macro for gateway login")
+                    time.sleep(2)  # תן לחלון ה-Gateway זמן להיפתח
+                    LoginHelper.run_login_macro()
+                    SESSION_AUTHENTICATED = True
+                    message = "Gateway הופעל והמאקרו הופעל. בדוק את חלון ה-Gateway לסטטוס."
+                
+                return jsonify({
+                    'success': success,
+                    'message': message
+                })
+            except ImportError:
+                logger.warning("login_recorder module not available, falling back to regular login")
+                # אם המודול לא זמין, נמשיך לגישה הרגילה
+        
+        # הפעלת Gateway (במקרה הרגיל ללא מאקרו)
+        success, message = start_gateway_process(username, password, auto_fill)
+        
+        if success:
+            SESSION_AUTHENTICATED = True
+            if auto_fill:
+                message += ". שים לב: חלון Gateway אמור להיפתח בנפרד מהדפדפן. יש לבדוק אם חלון ההתחברות של Gateway נפתח."
+        
+        return jsonify({
+            'success': success,
+            'message': message
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in gateway_login: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'שגיאה: {str(e)}'
+        })
+
+@app.route('/api/gateway/status', methods=['GET'])
+def gateway_status():
+    """API לבדיקת סטטוס Gateway"""
+    return jsonify({
+        'gateway_status': check_gateway_status(),
+        'api_port': API_PORT,
+        'api_available': check_port_open(port=API_PORT),
+        'authenticated': SESSION_AUTHENTICATED
+    })
+
+@app.route('/api/gateway/stop_recording', methods=['POST'])
+def stop_macro_recording():
+    """סיום הקלטת מאקרו התחברות ושמירתו"""
+    try:
+        # Using the LoginHelper class instead of importing login_recorder
+        
+        if LoginHelper.stop_login_recording() and LoginHelper.save_login_recording():
+            logger.info("Macro recording completed and saved successfully")
+            return jsonify({
+                'success': True,
+                'message': 'הקלטת המאקרו הסתיימה ונשמרה בהצלחה'
+            })
+        else:
+            logger.warning("Failed to save macro recording")
+            return jsonify({
+                'success': False,
+                'message': 'שגיאה בשמירת הקלטת המאקרו'
+            })
+    except ImportError:
+        return jsonify({
+            'success': False,
+            'message': 'מודול הקלטת המאקרו אינו זמין'
+        })
+    except Exception as e:
+        logger.error(f"Error in stop_macro_recording: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'שגיאה בסיום הקלטת המאקרו: {str(e)}'
+        })
+
+@app.route('/api/gateway/macro_status', methods=['GET'])
+def get_macro_status():
+    """בדיקת סטטוס מאקרו התחברות"""
+    try:
+        # Using the LoginHelper class instead of importing login_recorder
+        import os
+        
+        recording_exists = os.path.exists(LoginHelper.DEFAULT_RECORDING_PATH)
+        
+        return jsonify({
+            'success': True,
+            'hasRecording': recording_exists,
+            'recordingPath': LoginHelper.DEFAULT_RECORDING_PATH if recording_exists else None
+        })
+    except ImportError:
+        return jsonify({
+            'success': False,
+            'hasRecording': False,
+            'message': 'מודול הקלטת המאקרו אינו זמין'
+        })
+    except Exception as e:
+        logger.error(f"Error in get_macro_status: {str(e)}")
+        return jsonify({
+            'success': False,
+            'hasRecording': False,
+            'message': f'שגיאה בבדיקת סטטוס המאקרו: {str(e)}'
+        })
+
+@app.route('/api/gateway/test_macro', methods=['POST'])
+def test_macro():
+    """בדיקת מאקרו התחברות"""
+    try:
+        # Using the LoginHelper class instead of importing login_recorder
+        import os
+        
+        if not os.path.exists(LoginHelper.DEFAULT_RECORDING_PATH):
+            return jsonify({
+                'success': False,
+                'message': 'לא נמצא מאקרו התחברות. יש להקליט מאקרו קודם.'
+            })
+        
+        # בדוק אם Gateway כבר פועל
+        if check_port_open(port=API_PORT):
+            return jsonify({
+                'success': False,
+                'message': 'Gateway כבר פועל - אנא סגור אותו לפני בדיקת המאקרו'
+            })
+        
+        # הפעל את ה-Gateway ללא מילוי אוטומטי
+        # נשתמש בנתונים מקובץ התצורה
+        config = load_system_config()
+        username = config.get('username', '')
+        password = config.get('password', '')
+        
+        if not username or not password:
+            return jsonify({
+                'success': False,
+                'message': 'חסרים פרטי התחברות בקובץ התצורה'
+            })
+            
+        # הפעל את ה-Gateway
+        success, message = start_gateway_process(username, password, auto_fill=False)
+        
+        if not success:
+            return jsonify({
+                'success': False,
+                'message': f'שגיאה בהפעלת Gateway: {message}'
+            })
+            
+        # המתן שניה-שתיים שהחלון ייפתח
+        time.sleep(2)
+        
+        # הפעל את המאקרו
+        
+        success = LoginHelper.run_login_macro()
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'בדיקת המאקרו הסתיימה בהצלחה'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'בדיקת המאקרו נכשלה. ייתכן שיש צורך להקליט מאקרו חדש.'
+            })
+    except ImportError:
+        return jsonify({
+            'success': False,
+            'message': 'מודול הקלטת המאקרו אינו זמין'
+        })
+    except Exception as e:
+        logger.error(f"Error in test_macro: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'שגיאה בבדיקת המאקרו: {str(e)}'
+        })
+
+@app.route('/api/gateway/delete_macro', methods=['POST'])
+def delete_macro():
+    """מחיקת מאקרו התחברות"""
+    try:
+        # Using the LoginHelper class instead of importing login_recorder
+        import os
+        
+        if not os.path.exists(LoginHelper.DEFAULT_RECORDING_PATH):
+            return jsonify({
+                'success': False,
+                'message': 'לא נמצא מאקרו התחברות למחיקה'
+            })
+        
+        os.remove(LoginHelper.DEFAULT_RECORDING_PATH)
+        
+        return jsonify({
+            'success': True,
+            'message': 'מאקרו ההתחברות נמחק בהצלחה'
+        })
+    except ImportError:
+        return jsonify({
+            'success': False,
+            'message': 'מודול הקלטת המאקרו אינו זמין'
+        })
+    except Exception as e:
+        logger.error(f"Error in delete_macro: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'שגיאה במחיקת המאקרו: {str(e)}'
+        })
+
+@app.route('/api/gateway/logout', methods=['POST'])
+def gateway_logout():
+    """יציאה מהמערכת"""
+    global SESSION_AUTHENTICATED
+    SESSION_AUTHENTICATED = False
+    return jsonify({
+        'success': True,
+        'message': 'יצאת מהמערכת בהצלחה'
+    })
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint."""
+    return jsonify({
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "uptime": time.time() - START_TIME
+    })
+
+@app.route('/api/status/all', methods=['GET'])
+@cached_endpoint(ttl=30)
+def get_all_statuses():
+    """Returns the status of all managed processes."""
+    all_statuses = get_all_statuses_data()
+    return jsonify(all_statuses)
+
+@app.route('/api/processes/start/<name>', methods=['POST'])
+def start_process(name):
+    """Starts a new process by name."""
+    if name not in processes:
+        return jsonify({"error": "Unknown process name"}), 404
+    
+    if get_process_status(name)["status"] == "running":
+        return jsonify({"error": f"Process '{name}' is already running"}), 400
+
+    command = []
+    # Map process names to their respective script paths
+    script_map = {
+        "model_api": ["src/model_api.py"],
+        "main_trainer": ["main_trainer.py"],
+        "backtester": ["backtester.py"],
+        "data_collector": ["src/data_collector.py"],
+        "preprocessor": ["run_preprocessing.py"],
+        "feature_engineering": ["src/feature_engineering.py"],
+        "feature_engineering_technical": ["src/feature_engineering.py", "--category", "technical"],
+        "feature_engineering_candlestick": ["src/feature_engineering.py", "--category", "candlestick"],
+        "feature_engineering_volume": ["src/feature_engineering.py", "--category", "volume"],
+        "feature_engineering_statistical": ["src/feature_engineering.py", "--category", "statistical"],
+        "run_all": ["run_all.py"],
+    }
+
+    if name in script_map:
+        command = [sys.executable] + script_map[name]
+    elif name == "trading_agent":
+        command = ["node", "agent/trading_agent.js"]
+    else:
+        return jsonify({"error": "פקודת תהליך לא מוגדרת"}), 500
+    
+    # Check IBKR connection for processes that require it
+    if name in ["data_collector", "trading_agent"]:
+        is_available, host, port, error_msg = is_ibkr_available()
+        if not is_available:
+            process_type = "איסוף נתונים" if name == "data_collector" else "סוכן המסחר"
+            return jsonify({
+                "error": f"לא ניתן להפעיל תהליך {process_type}: {error_msg}",
+                "status": "error",
+                "message": "בדיקת חיבור ל-IBKR נכשלה",
+                "details": {
+                    "host": host,
+                    "port": port
+                }
+            }), 400
+
+    try:
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
+        processes[name] = proc
+        
+        # חכה קצת כדי לבדוק אם התהליך לא קרס מיד
+        time.sleep(2)
+        
+        if proc.poll() is None:
+            # התהליך עדיין רץ - זה סימן טוב
+            if name == "data_collector":
+                return jsonify({
+                    "message": f"תהליך '{name}' התחיל בהצלחה. IBKR מחובר ומוכן.",
+                    "pid": proc.pid, 
+                    "status": "running",
+                    "note": "תהליך איסוף הנתונים פועל עם חיבור פעיל ל-IBKR"
+                })
+            else:
+                return jsonify({"message": f"תהליך '{name}' התחיל בהצלחה", "pid": proc.pid, "status": "running"})
+        else:
+            # התהליך נכשל
+            stdout, stderr = proc.communicate()
+            error_msg = f"תהליך '{name}' נכשל מיד לאחר ההפעלה"
+            if stderr:
+                error_msg += f"\nשגיאה: {stderr}"
+            if stdout:
+                error_msg += f"\nפלט: {stdout}"
+            
+            return jsonify({"error": error_msg, "exit_code": proc.returncode}), 500
+    except Exception as e:
+        return jsonify({"error": f"נכשל בהפעלת תהליך '{name}': {e}", "trace": traceback.format_exc()}), 500
+
+
+@app.route('/api/processes/run-and-wait/<name>', methods=['POST'])
+def run_and_wait_process(name):
+    """Run a process and wait for it to complete, similar to the old dashboard."""
+    if name not in processes:
+        processes[name] = None
+    
+    # בדיקה משופרת: אם התהליך מסומן כפעיל, בדוק אם הוא באמת פעיל במערכת
+    if get_process_status(name)["status"] == "running":
+        try:
+            # בדוק אם התהליך באמת פעיל במערכת
+            import psutil
+            proc = processes[name]
+            if not proc or not psutil.pid_exists(proc.pid):
+                # התהליך לא באמת פעיל, נאפס את הסטטוס
+                processes[name] = None
+                print(f"Process '{name}' was marked as running but does not exist - resetting")
+            else:
+                # התהליך אכן פעיל, לא ניתן להפעיל שוב
+                return jsonify({"error": f"Process '{name}' is already running"}), 400
+        except ImportError:
+            # אם psutil לא מותקן, נשתמש בבדיקה סטנדרטית
+            return jsonify({"error": f"Process '{name}' is already running"}), 400
+        except Exception as e:
+            # אם יש שגיאה אחרת, נניח שהתהליך לא פעיל ונאפס
+            processes[name] = None
+            print(f"Error checking process '{name}': {e} - resetting process state")
+
+    command = []
+    # Map process names to their respective script paths
+    script_map = {
+        "model_api": ["src/model_api.py"],
+        "main_trainer": ["main_trainer.py"],
+        "backtester": ["backtester.py"],
+        "data_collector": ["src/data_collector.py"],
+        "preprocessor": ["run_preprocessing.py"],
+        "feature_engineering": ["src/feature_engineering.py"],
+        "feature_engineering_technical": ["src/feature_engineering.py", "--category", "technical"],
+        "feature_engineering_candlestick": ["src/feature_engineering.py", "--category", "candlestick"],
+        "feature_engineering_volume": ["src/feature_engineering.py", "--category", "volume"],
+        "feature_engineering_statistical": ["src/feature_engineering.py", "--category", "statistical"],
+        "run_all": ["run_all.py"],
+    }
+
+    if name in script_map:
+        command = [sys.executable] + script_map[name]
+    elif name == "trading_agent":
+        command = ["node", "agent/trading_agent.js"]
+    else:
+        return jsonify({"error": "פקודת תהליך לא מוגדרת"}), 500
+
+    # Check IBKR connection for processes that require it
+    if name in ["data_collector", "trading_agent"]:
+        is_available, host, port, error_msg = is_ibkr_available()
+        if not is_available:
+            process_type = "איסוף נתונים" if name == "data_collector" else "סוכן המסחר"
+            return jsonify({
+                "error": f"לא ניתן להפעיל תהליך {process_type}: {error_msg}",
+                "status": "error",
+                "message": "בדיקת חיבור ל-IBKR נכשלה",
+                "details": {
+                    "host": host,
+                    "port": port
+                }
+            }), 400
+
+    try:
+        proc = subprocess.Popen(
+            command, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT, 
+            text=True, 
+            encoding='utf-8',
+            errors='replace',
+            bufsize=1,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+        )
+        processes[name] = proc
+        
+        # במקום לחכות כאן ולחסום את שרת ה-API, פשוט נחזיר הודעה שהתהליך התחיל
+        if name == "data_collector":
+            return jsonify({
+                "message": f"תהליך '{name}' התחיל. בודק חיבור ל-IBKR... תוצאות יופיעו בלוג.",
+                "status": "running",
+                "pid": proc.pid,
+                "note": "חשוב: תהליך זה דורש חיבור פעיל ל-IBKR Gateway או TWS."
+            })
+        else:
+            return jsonify({
+                "message": f"תהליך '{name}' התחיל. בדוק את סטטוס התהליך בהמשך.",
+                "status": "running",
+                "pid": proc.pid
+            })
+        
+        # קוד זה לא יגיע לכאן יותר כי החזרנו תגובה מוקדם יותר
+            
+    except FileNotFoundError:
+        return jsonify({"error": f"שגיאה: הפקודה '{command[0]}' לא נמצאה. ודא שהנתיב נכון."}), 500
+    except Exception as e:
+        return jsonify({"error": f"שגיאה בהרצת התהליך: {e}", "trace": traceback.format_exc()}), 500
+
+
+@app.route('/api/processes/logs/<name>', methods=['GET'])
+def get_process_logs(name):
+    """Get logs for a specific process to help debug failures."""
+    log_files = {
+        "data_collector": "logs/data_collector.log",
+        "main_trainer": "main_trainer_output.log",
+        "backtester": "backtester_output.log",
+        "preprocessor": "logs/processing.log",
+        "feature_engineering": "logs/feature_engineering.log",
+        "model_api": "logs/model_api.log"
+    }
+    
+    log_file = log_files.get(name)
+    if not log_file:
+        return jsonify({"error": f"No log file configured for process '{name}'"}), 404
+    
+    try:
+        if os.path.exists(log_file):
+            with open(log_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                # Return last 50 lines
+                recent_lines = lines[-50:] if len(lines) > 50 else lines
+                return jsonify({
+                    "logs": ''.join(recent_lines),
+                    "total_lines": len(lines),
+                    "showing_lines": len(recent_lines)
+                })
+        else:
+            return jsonify({"error": f"Log file not found: {log_file}"}), 404
+    except Exception as e:
+        return jsonify({"error": f"Failed to read log file: {e}"}), 500
+
+
+@app.route('/api/processes/stop/<name>', methods=['POST'])
+def stop_process(name):
+    """Stops a running process by name."""
+    if name not in processes:
+        return jsonify({"error": "Unknown process name"}), 404
+
+    proc = processes.get(name)
+    if not proc or proc.poll() is not None:
+        return jsonify({"error": f"Process '{name}' is not running"}), 400
+        
+    try:
+        proc.terminate()
+        proc.wait(timeout=5)
+        processes[name] = None
+        return jsonify({"message": f"תהליך '{name}' הופסק."})
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        processes[name] = None
+        return jsonify({"message": f"תהליך '{name}' הופסק בכוח."})
+    except Exception as e:
+        return jsonify({"error": f"נכשל בהפסקת תהליך '{name}': {e}"}), 500
+
+# --- Agent Control ---
+@app.route('/api/agent/command', methods=['POST'])
+def agent_command():
+    """Receives a command and writes it to the agent's command file."""
+    command_data = request.json
+    if not command_data or 'command' not in command_data:
+        return jsonify({"error": "Invalid command data"}), 400
+    
+    command_path = Path('agent/command.json')
+    try:
+        command_data['timestamp'] = datetime.now().isoformat()
+        with open(command_path, 'w', encoding='utf-8') as f:
+            json.dump(command_data, f)
+        return jsonify({"message": f"פקודה '{command_data['command']}' נשלחה לסוכן."})
+    except Exception as e:
+        return jsonify({"error": f"נכשל בכתיבת קובץ הפקודה: {e}"}), 500
+
+@app.route('/api/agent/position', methods=['GET'])
+def get_agent_position():
+    """Reads the current trade state from the agent's database."""
+    db_path = Path('agent/state.db')
+    if not db_path.exists():
+        return jsonify({"error": "Agent state database not found."}), 404
+    
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        cur = conn.cursor()
+        row = cur.execute("SELECT value FROM state WHERE key = ?", ('trade_state',)).fetchone()
+        conn.close()
+        
+        trade_state = json.loads(row[0]) if row and row[0] else {}
+        return jsonify(trade_state)
+    except Exception as e:
+        return jsonify({"error": f"Error accessing agent state DB: {e}"}), 500
+
+# --- Config and Data Health ---
+@app.route('/api/config', methods=['GET', 'POST', 'PUT'])
+def handle_config():
+    """Handles loading and saving of the system_config.json file."""
+    if request.method == 'GET':
+        try:
+            config_data = load_system_config()
+            return jsonify(config_data)
+        except Exception as e:
+            return jsonify({"error": f"Failed to load system_config.json: {e}"}), 500
+    
+    elif request.method in ['POST', 'PUT']:
+        try:
+            new_config_data = request.json
+            if not new_config_data:
+                return jsonify({"error": "לא סופקו נתוני JSON"}), 400
+            save_system_config(new_config_data)
+            return jsonify({"message": "התצורה נשמרה בהצלחה."})
+        except Exception as e:
+            return jsonify({"error": f"נכשל בשמירת system_config.json: {e}"}), 500
+
+@app.route('/api/data_health', methods=['GET'])
+def get_data_health():
+    """Checks the status of key data files."""
+    data_files = [
+        ("SPY_ibkr.csv", "data/raw/SPY_ibkr.csv"),
+        ("VIX_ibkr.csv", "data/raw/VIX_ibkr.csv"),
+        ("SPY_processed.csv", "data/processed/SPY_processed.csv"),
+        ("SPY_features.csv", "data/processed/SPY_features.csv")
+    ]
+    health_info = []
+    for label, path_str in data_files:
+        path = Path(path_str)
+        info = {"file": label, "exists": False}
+        if path.exists():
+            try:
+                stat = path.stat()
+                info["exists"] = True
+                info["modified_date"] = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
+                
+                # Read file to get row count and date range
+                if path.suffix.lower() == '.csv':
+                    try:
+                        df = pd.read_csv(path, parse_dates=True, index_col=0)
+                        info["rows"] = len(df)
+                        
+                        # Try to get date range if there's a date column/index
+                        if hasattr(df.index, 'min') and hasattr(df.index, 'max'):
+                            try:
+                                # Convert index to datetime if it's not already
+                                if not pd.api.types.is_datetime64_any_dtype(df.index):
+                                    date_index = pd.to_datetime(df.index, errors='coerce')
+                                else:
+                                    date_index = df.index
+                                
+                                # Get valid dates (not NaT)
+                                valid_dates = date_index.dropna()
+                                if len(valid_dates) > 0:
+                                    info["start_date"] = valid_dates.min().strftime("%Y-%m-%d")
+                                    info["end_date"] = valid_dates.max().strftime("%Y-%m-%d")
+                                else:
+                                    info["start_date"] = "לא זוהו תאריכים"
+                                    info["end_date"] = "לא זוהו תאריכים"
+                            except Exception:
+                                info["start_date"] = "שגיאה בקריאת תאריכים"
+                                info["end_date"] = "שגיאה בקריאת תאריכים"
+                        else:
+                            info["start_date"] = "לא זוהו תאריכים"
+                            info["end_date"] = "לא זוהו תאריכים"
+                    except Exception as e:
+                        info["rows"] = f"שגיאה בקריאת הקובץ: {str(e)[:50]}"
+                        info["start_date"] = "לא זמין"
+                        info["end_date"] = "לא זמין"
+                elif path.suffix.lower() == '.json':
+                    try:
+                        with open(path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        info["rows"] = len(data) if isinstance(data, (list, dict)) else 1
+                        info["start_date"] = "לא רלוונטי"
+                        info["end_date"] = "לא רלוונטי"
+                    except Exception as e:
+                        info["rows"] = f"שגיאה: {str(e)[:50]}"
+                        info["start_date"] = "לא זמין"
+                        info["end_date"] = "לא זמין"
+                elif path.suffix.lower() == '.pkl':
+                    try:
+                        # For pickle files, we just show that they exist
+                        info["rows"] = "קובץ מודל"
+                        info["start_date"] = "לא רלוונטי"
+                        info["end_date"] = "לא רלוונטי"
+                    except Exception:
+                        info["rows"] = "לא ניתן לקרוא"
+                        info["start_date"] = "לא זמין"
+                        info["end_date"] = "לא זמין"
+                else:
+                    # For other files, just count lines
+                    try:
+                        with open(path, 'r', encoding='utf-8') as f:
+                            info["rows"] = sum(1 for _ in f)
+                        info["start_date"] = "לא רלוונטי"
+                        info["end_date"] = "לא רלוונטי"
+                    except Exception:
+                        info["rows"] = "לא ניתן לקרוא"
+                        info["start_date"] = "לא זמין"
+                        info["end_date"] = "לא זמין"
+            except Exception as e:
+                info["rows"] = f"שגיאה: {e}"
+                info["start_date"] = "לא זמין"
+                info["end_date"] = "לא זמין"
+        else:
+            info["rows"] = "קובץ לא קיים"
+            info["start_date"] = "לא זמין"
+            info["end_date"] = "לא זמין"
+        health_info.append(info)
+    return jsonify(health_info)
+
+@app.route('/api/model_health', methods=['GET'])
+def get_model_health():
+    """Checks the status of model files."""
+    model_files = [
+        ("champion_model.pkl", "models/champion_model.pkl"),
+        ("champion_scaler.pkl", "models/champion_scaler.pkl"),
+        ("champion_config.json", "models/champion_model_config.json")
+    ]
+    health_info = []
+    for label, path_str in model_files:
+        path = Path(path_str)
+        info = {"file": label, "exists": False}
+        if path.exists():
+            try:
+                stat = path.stat()
+                info["exists"] = True
+                info["modified_date"] = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
+                
+                # Handle different file types
+                if path.suffix.lower() == '.json':
+                    try:
+                        with open(path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        info["rows"] = len(data) if isinstance(data, (list, dict)) else 1
+                        info["start_date"] = "לא רלוונטי"
+                        info["end_date"] = "לא רלוונטי"
+                    except Exception as e:
+                        info["rows"] = f"שגיאה: {str(e)[:50]}"
+                        info["start_date"] = "לא זמין"
+                        info["end_date"] = "לא זמין"
+                elif path.suffix.lower() == '.pkl':
+                    try:
+                        # For pickle files, we just show that they exist
+                        info["rows"] = "קובץ מודל"
+                        info["start_date"] = "לא רלוונטי"
+                        info["end_date"] = "לא רלוונטי"
+                    except Exception:
+                        info["rows"] = "לא ניתן לקרוא"
+                        info["start_date"] = "לא זמין"
+                        info["end_date"] = "לא זמין"
+                else:
+                    info["rows"] = "לא זמין"
+                    info["start_date"] = "לא זמין"
+                    info["end_date"] = "לא זמין"
+            except Exception as e:
+                info["rows"] = f"שגיאה: {str(e)[:50]}"
+                info["start_date"] = "לא זמין"
+                info["end_date"] = "לא זמין"
+        else:
+            info["rows"] = "קובץ לא קיים"
+            info["start_date"] = "לא זמין"
+            info["end_date"] = "לא זמין"
+        health_info.append(info)
+    return jsonify(health_info)
+
+# --- Analysis Endpoints ---
+@app.route('/api/analysis/training_summaries', methods=['GET'])
+def get_training_summaries():
+    """Gets all training summaries."""
+    try:
+        df = load_training_summaries()
+        if df.empty:
+            return jsonify([])
+        result = df.to_json(orient="records", date_format="iso")
+        return jsonify(json.loads(result))
+    except Exception as e:
+        return jsonify({"error": f"Could not load training summaries: {e}", "trace": traceback.format_exc()}), 500
+
+@app.route('/api/analysis/backtests', methods=['GET'])
+def list_backtests():
+    """Lists available backtest summary files."""
+    results_dir = Path("reports/backtest_results")
+    if not results_dir.exists():
+        return jsonify([])
+    
+    summary_files = sorted(results_dir.glob("summary_*.json"), key=os.path.getmtime, reverse=True)
+    return jsonify([f.name for f in summary_files])
+
+@app.route('/api/analysis/backtests/<filename>', methods=['GET'])
+def get_backtest_summary(filename):
+    """Gets a specific backtest summary."""
+    results_dir = Path("reports/backtest_results")
+    summary_file = results_dir / filename
+    
+    if not summary_file.exists() or not filename.startswith("summary_"):
+        # Return empty structure instead of 404
+        return jsonify({
+            "error": "קובץ לא נמצא",
+            "message": f"סיכום בקטסט '{filename}' לא נמצא ב-reports/backtest_results",
+            "filename": filename,
+            "data": {}
+        })
+    
+    try:
+        with open(summary_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({
+            "error": f"לא ניתן לקרוא קובץ סיכום: {e}",
+            "message": "שגיאה בקריאת קובץ סיכום בקטסט",
+            "filename": filename,
+            "data": {}
+        })
+
+@app.route('/api/analysis/promote/<timestamp>', methods=['POST'])
+def promote_model(timestamp):
+    """Promotes a candidate model to champion."""
+    model_dir = Path('models')
+    candidate_model_path = model_dir / f'candidate_model_{timestamp}.pkl'
+    candidate_scaler_path = model_dir / f'candidate_scaler_{timestamp}.pkl'
+    candidate_config_path = model_dir / f'candidate_model_config_{timestamp}.json'
+
+    if not all([p.exists() for p in [candidate_model_path, candidate_scaler_path, candidate_config_path]]):
+        return jsonify({"error": f"Candidate model files for timestamp {timestamp} not found."}), 404
+
+    champion_model = model_dir / 'champion_model.pkl'
+    champion_scaler = model_dir / 'champion_scaler.pkl'
+    champion_config = model_dir / 'champion_model_config.json'
+    
+    try:
+        # 1. Archive existing champion
+        if champion_model.exists():
+            archive_dir = model_dir / 'archive'
+            archive_dir.mkdir(exist_ok=True)
+            ts_archive = datetime.now().strftime('%Y%m%d_%H%M%S')
+            
+            shutil.move(champion_model, archive_dir / f"{champion_model.name}.promoted_away.{ts_archive}")
+            if champion_scaler.exists():
+                shutil.move(champion_scaler, archive_dir / f"{champion_scaler.name}.promoted_away.{ts_archive}")
+            if champion_config.exists():
+                shutil.move(champion_config, archive_dir / f"{champion_config.name}.promoted_away.{ts_archive}")
+
+        # 2. Promote candidate to champion
+        shutil.copy(candidate_model_path, champion_model)
+        shutil.copy(candidate_scaler_path, champion_scaler)
+        shutil.copy(candidate_config_path, champion_config)
+        
+        return jsonify({"message": f"מודל {timestamp} קודם לאלוף בהצלחה."})
+    except Exception as e:
+        return jsonify({"error": f"נכשל בקידום המודל: {e}", "trace": traceback.format_exc()}), 500
+
+# --- Log Management ---
+@app.route('/api/logs/list', methods=['GET'])
+def list_logs():
+    """Lists available log files."""
+    log_files = [
+        'logs/main_trainer_output.log',
+        'logs/backtester_output.log', 
+        'logs/all_features_computed.log',
+        'agent/trading_log.txt',
+        'logs/ibkr_gateway.log',
+        'logs/data_collector.log',
+        'logs/preprocessing.log',
+        'logs/model_training.log'
+    ]
+    
+    available_logs = []
+    for log_file in log_files:
+        log_path = Path(log_file)
+        if log_path.exists():
+            stat = log_path.stat()
+            available_logs.append({
+                'name': log_file,
+                'size': stat.st_size,
+                'modified': datetime.fromtimestamp(stat.st_mtime).isoformat()
+            })
+    
+    return jsonify(available_logs)
+
+@app.route('/api/logs/<path:filename>', methods=['GET'])
+def get_log_content(filename):
+    """Gets log file content with optional line range."""
+    log_path = Path(filename)
+    if not log_path.exists():
+        return jsonify({"error": "Log file not found"}), 404
+    
+    lines = int(request.args.get('lines', 100))
+    
+    try:
+        with open(log_path, 'r', encoding='utf-8') as f:
+            content = f.readlines()
+            # Return last N lines
+            content = content[-lines:] if len(content) > lines else content
+            return jsonify({"content": "".join(content), "total_lines": len(content)})
+    except Exception as e:
+        return jsonify({"error": f"Failed to read log file: {e}"}), 500
+
+# --- Optuna Analysis ---
+@app.route('/api/analysis/optuna', methods=['GET'])
+def get_optuna_analysis():
+    """Gets Optuna study analysis."""
+    db_path = Path('spy_strategy_optimization.db')
+    if not db_path.exists():
+        return jsonify({
+            "error": "מסד נתוני Optuna לא נמצא",
+            "message": "אין מחקרי Optuna זמינים. הרץ אימון תחילה כדי ליצור נתונים.",
+            "study_name": None,
+            "trials": [],
+            "params": [],
+            "values": []
+        })
+    
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        
+        # Get studies
+        studies_df = pd.read_sql_query(
+            "SELECT study_name, storage_id FROM studies ORDER BY study_id DESC",
+            conn
+        )
+        
+        if studies_df.empty:
+            conn.close()
+            return jsonify({
+                "error": "לא נמצאו מחקרים",
+                "message": "מסד הנתונים קיים אך לא מכיל מחקרים. הרץ אימון תחילה.",
+                "study_name": None,
+                "trials": [],
+                "params": [],
+                "values": []
+            })
+        
+        study_name = studies_df['study_name'].iloc[0]
+        
+        # Get trials
+        trials_df = pd.read_sql_query(
+            f"SELECT * FROM trials WHERE study_id = (SELECT study_id FROM studies WHERE study_name = '{study_name}') ORDER BY trial_id",
+            conn
+        )
+        
+        # Get trial params
+        params_df = pd.read_sql_query(
+            f"SELECT * FROM trial_params WHERE trial_id IN (SELECT trial_id FROM trials WHERE study_id = (SELECT study_id FROM studies WHERE study_name = '{study_name}'))",
+            conn
+        )
+        
+        # Get trial values
+        values_df = pd.read_sql_query(
+            f"SELECT * FROM trial_values WHERE trial_id IN (SELECT trial_id FROM trials WHERE study_id = (SELECT study_id FROM studies WHERE study_name = '{study_name}'))",
+            conn
+        )
+        
+        conn.close()
+        
+        return jsonify({
+            "study_name": study_name,
+            "trials": trials_df.to_dict('records'),
+            "params": params_df.to_dict('records'),
+            "values": values_df.to_dict('records')
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "error": f"נכשל בטעינת נתוני Optuna: {e}",
+            "message": "אירעה שגיאת מסד נתונים",
+            "study_name": None,
+            "trials": [],
+            "params": [],
+            "values": []
+        })
+
+# --- System Status ---
+@app.route('/api/system/status', methods=['GET'])
+def get_system_status():
+    """Gets detailed system status including process monitoring."""
+    try:
+        import psutil
+        
+        # Get current processes
+        system_processes = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                info = proc.info
+                if info['cmdline']:
+                    cmdline = ' '.join(info['cmdline'])
+                    # Check if it's one of our processes
+                    if any(script in cmdline for script in ['dashboard.py', 'api_server.py', 'main_trainer.py', 'trading_agent.js']):
+                        system_processes.append({
+                            'pid': info['pid'],
+                            'name': info['name'],
+                            'cmdline': cmdline
+                        })
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        
+        return jsonify({
+            "managed_processes": {name: get_process_status(name) for name in processes.keys()},
+            "system_processes": system_processes
+        })
+        
+    except ImportError:
+        return jsonify({
+            "managed_processes": {name: get_process_status(name) for name in processes.keys()},
+            "system_processes": []
+        })
+
+@app.route('/api/system/info', methods=['GET'])
+def get_system_info():
+    """Gets detailed system information including CPU, memory and disk usage."""
+    try:
+        import psutil
+        from platform import system, release, version, machine, processor
+        
+        # Get system information
+        os_info = {
+            "system": system(),
+            "release": release(),
+            "version": version(),
+            "machine": machine(),
+            "processor": processor()
+        }
+        
+        # Get CPU information
+        cpu_info = {
+            "physical_cores": psutil.cpu_count(logical=False),
+            "total_cores": psutil.cpu_count(logical=True),
+            "usage_percent": psutil.cpu_percent(interval=0.5),
+            "frequency": {
+                "current": psutil.cpu_freq().current if psutil.cpu_freq() else None,
+                "min": psutil.cpu_freq().min if psutil.cpu_freq() else None,
+                "max": psutil.cpu_freq().max if psutil.cpu_freq() else None
+            }
+        }
+        
+        # Get memory information
+        memory = psutil.virtual_memory()
+        memory_info = {
+            "total": memory.total,
+            "available": memory.available,
+            "used": memory.used,
+            "percent": memory.percent,
+            "total_gb": round(memory.total / (1024**3), 2),
+            "available_gb": round(memory.available / (1024**3), 2),
+            "used_gb": round(memory.used / (1024**3), 2)
+        }
+        
+        # Get disk information
+        try:
+            # Try Windows C: drive first, then fallback to root
+            disk = psutil.disk_usage('C:' if os.name == 'nt' else '/')
+        except:
+            disk = psutil.disk_usage('/')
+            
+        disk_info = {
+            "total": disk.total,
+            "used": disk.used,
+            "free": disk.free,
+            "percent": disk.percent,
+            "total_gb": round(disk.total / (1024**3), 2),
+            "used_gb": round(disk.used / (1024**3), 2),
+            "free_gb": round(disk.free / (1024**3), 2)
+        }
+        
+        # Get system uptime
+        uptime_seconds = int(time.time() - psutil.boot_time())
+        uptime = {
+            "seconds": uptime_seconds,
+            "formatted": f"{uptime_seconds // 86400}d {(uptime_seconds % 86400) // 3600}h {(uptime_seconds % 3600) // 60}m {uptime_seconds % 60}s"
+        }
+        
+        return jsonify({
+            "os": os_info,
+            "cpu": cpu_info,
+            "memory": memory_info,
+            "disk": disk_info,
+            "uptime": uptime,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except ImportError:
+        return jsonify({
+            "error": "psutil not installed",
+            "message": "מודול psutil לא מותקן. התקן אותו באמצעות 'pip install psutil'"
+        })
+
+
+# --- Command History ---
+@app.route('/api/agent/command/history', methods=['GET'])
+def get_command_history():
+    """Gets the command history of the agent from the log file."""
+    try:
+        command_path = Path('agent/command.json')
+        command_log_path = Path('agent/trading_log.txt')
+        
+        # Parse commands from the trading log
+        commands = []
+        if command_log_path.exists():
+            with open(command_log_path, encoding='utf-8', errors='ignore') as f:
+                log_content = f.readlines()
+                
+                for line in log_content:
+                    if "Received command:" in line:
+                        try:
+                            parts = line.split("Received command:", 1)
+                            if len(parts) > 1:
+                                timestamp = parts[0].strip()
+                                cmd_json = parts[1].strip()
+                                command_data = json.loads(cmd_json)
+                                command_data["timestamp"] = timestamp
+                                commands.append(command_data)
+                        except Exception as e:
+                            print(f"Error parsing command line: {e}")
+        
+        # Get current command
+        current_command = {}
+        if command_path.exists():
+            try:
+                with open(command_path, encoding='utf-8') as f:
+                    content = f.read()
+                    current_command = json.loads(content) if content else {}
+            except Exception as e:
+                print(f"Error reading command.json: {e}")
+        
+        # Get command history from trading_log.txt
+        commands_history = []
+        if command_log_path.exists():
+            try:
+                with open(command_log_path, encoding='utf-8') as f:
+                    lines = f.readlines()
+                    for line in reversed(lines):
+                        if "COMMAND:" in line:
+                            commands_history.append({
+                                "timestamp": line.split("[")[1].split("]")[0] if "[" in line else "N/A",
+                                "command": line.strip()
+                            })
+                            if len(commands_history) >= 10:  # Limit to last 10 commands
+                                break
+            except Exception as e:
+                print(f"Error reading trading_log.txt: {e}")
+        
+        return jsonify({
+            "current": current_command,
+            "history": commands_history,
+            "commands": commands
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to get command history: {e}"}), 500
+
+# --- Data Reset ---
+@app.route('/api/data/reset', methods=['POST'])
+def reset_data():
+    """Resets all data files and starts collection process from scratch."""
+    try:
+        data_files = [
+            Path("data/raw/SPY_ibkr.csv"),
+            Path("data/raw/VIX_ibkr.csv"),
+            Path("data/processed/SPY_processed.csv")
+        ]
+        
+        # Delete data files
+        for file_path in data_files:
+            if file_path.exists():
+                file_path.unlink()
+        
+        # Start data collection process
+        command = [sys.executable, "run_all.py"]
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
+        processes["run_all"] = proc
+        
+        return jsonify({
+            "message": "הנתונים אופסו והתהליך המלא הופעל מחדש",
+            "deleted_files": [str(p) for p in data_files if not p.exists()]
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to reset data: {e}", "trace": traceback.format_exc()}), 500
+
+# --- Feature Engineering Endpoints ---
+@app.route('/api/features/info', methods=['GET'])
+def get_feature_info():
+    """Get feature engineering information."""
+    try:
+        config = load_system_config()
+        processed_file = Path(config.get('processed_data_path', 'data/processed/SPY_processed.csv'))
+        
+        info = {
+            'total_features': '-',
+            'new_features': '-',
+            'last_processing_time': '-'
+        }
+        
+        if processed_file.exists():
+            df = pd.read_csv(processed_file)
+            info['total_features'] = len(df.columns)
+            
+            # Get last modification time
+            mod_time = processed_file.stat().st_mtime
+            info['last_processing_time'] = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d %H:%M')
+            
+            # Count new features (this is a simple example)
+            basic_columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
+            new_features = len(df.columns) - len(basic_columns)
+            info['new_features'] = max(0, new_features)
+        
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({"error": f"Failed to get feature info: {e}"}), 500
+
+@app.route('/api/features/importance', methods=['GET'])
+def get_feature_importance():
+    """Get feature importance data."""
+    try:
+        # Look for feature importance files
+        models_dir = Path('models')
+        importance_files = list(models_dir.glob('**/feature_importance.json'))
+        
+        if not importance_files:
+            return jsonify({"error": "No feature importance data found"}), 404
+            
+        # Load the most recent one
+        latest_file = max(importance_files, key=lambda p: p.stat().st_mtime)
+        with open(latest_file, 'r', encoding='utf-8') as f:
+            importance_data = json.load(f)
+            
+        return jsonify(importance_data)
+    except Exception as e:
+        return jsonify({"error": f"Failed to get feature importance: {e}"}), 500
+
+# --- Training Endpoints ---
+@app.route('/api/training/results', methods=['GET'])
+def get_training_results():
+    """Get training results and metrics."""
+    try:
+        results = {
+            'accuracy': '-',
+            'f1_score': '-',
+            'auc': '-',
+            'last_training_time': '-'
+        }
+        
+        # Look for training results
+        models_dir = Path('models')
+        result_files = list(models_dir.glob('**/training_summary.json'))
+        
+        if result_files:
+            # Load the most recent one
+            latest_file = max(result_files, key=lambda p: p.stat().st_mtime)
+            with open(latest_file, 'r', encoding='utf-8') as f:
+                training_data = json.load(f)
+                
+            # Extract metrics
+            if 'metrics' in training_data:
+                metrics = training_data['metrics']
+                results['accuracy'] = f"{metrics.get('accuracy', 0):.3f}"
+                results['f1_score'] = f"{metrics.get('f1_score', 0):.3f}"
+                results['auc'] = f"{metrics.get('roc_auc', 0):.3f}"
+                
+            # Get timestamp
+            if 'timestamp' in training_data:
+                results['last_training_time'] = training_data['timestamp']
+            else:
+                mod_time = latest_file.stat().st_mtime
+                results['last_training_time'] = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d %H:%M')
+        
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": f"Failed to get training results: {e}"}), 500
+
+@app.route('/api/training/history', methods=['GET'])
+def get_training_history():
+    """Get training history."""
+    try:
+        models_dir = Path('models')
+        history = []
+        
+        # Look for all training summary files
+        for summary_file in models_dir.glob('**/training_summary.json'):
+            try:
+                with open(summary_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    
+                # Add file info
+                data['file_path'] = str(summary_file)
+                data['file_timestamp'] = summary_file.stat().st_mtime
+                history.append(data)
+            except Exception as e:
+                continue
+                
+        # Sort by timestamp
+        history.sort(key=lambda x: x.get('file_timestamp', 0), reverse=True)
+        
+        return jsonify(history)
+    except Exception as e:
+        return jsonify({"error": f"Failed to get training history: {e}"}), 500
+
+# --- Backtest Endpoints ---
+@app.route('/api/backtest/results', methods=['GET'])
+def get_backtest_results():
+    """Get latest backtest results."""
+    try:
+        results = {
+            'total_return': '-',
+            'sharpe_ratio': '-',
+            'max_drawdown': '-',
+            'win_rate': '-',
+            'last_backtest_time': '-'
+        }
+        
+        # Look for backtest results
+        results_dir = Path('reports/backtest_results')
+        if results_dir.exists():
+            summary_files = list(results_dir.glob('summary_*.json'))
+            if summary_files:
+                # Get the most recent summary file
+                latest_file = max(summary_files, key=lambda p: p.stat().st_mtime)
+                with open(latest_file, 'r', encoding='utf-8') as f:
+                    backtest_data = json.load(f)
+                    
+                # Extract metrics
+                results['total_return'] = f"{backtest_data.get('total_return', 0)*100:.2f}%"
+                results['sharpe_ratio'] = f"{backtest_data.get('sharpe_ratio', 0):.2f}"
+                results['max_drawdown'] = f"{backtest_data.get('max_drawdown', 0)*100:.2f}%"
+                results['win_rate'] = f"{backtest_data.get('win_rate', 0)*100:.2f}%"
+                
+                # Get timestamp
+                mod_time = latest_file.stat().st_mtime
+                results['last_backtest_time'] = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d %H:%M')
+        
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": f"Failed to get backtest results: {e}"}), 500
+
+@app.route('/api/backtest/equity', methods=['GET'])
+def get_backtest_equity():
+    """Get backtest equity curve data."""
+    try:
+        results_dir = Path('reports/backtest_results')
+        equity_files = list(results_dir.glob('equity_curve_*.csv'))
+        
+        if not equity_files:
+            return jsonify({"error": "No equity curve data found"}), 404
+            
+        # Get the most recent equity file
+        latest_file = max(equity_files, key=lambda p: p.stat().st_mtime)
+        df = pd.read_csv(latest_file, index_col=0, parse_dates=True)
+        
+        # Convert to JSON format for charts
+        equity_data = {
+            'dates': df.index.strftime('%Y-%m-%d').tolist(),
+            'equity': df['equity'].tolist(),
+            'benchmark': df.get('benchmark_equity', df['equity']).tolist()
+        }
+        
+        return jsonify(equity_data)
+    except Exception as e:
+        return jsonify({"error": f"Failed to get equity curve: {e}"}), 500
+
+# --- Trading Agent Endpoints ---
+@app.route('/api/agent/status', methods=['GET'])
+def get_agent_status():
+    """Get trading agent status."""
+    try:
+        status = {
+            'status': 'כבוי',
+            'test_mode': True,
+            'ibkr_connected': False,
+            'active_model': None,
+            'last_action': '-',
+            'uptime': '-',
+            'open_positions': 0,
+            'daily_pnl': '$0.00',
+            'total_pnl': '$0.00'
+        }
+        
+        # Check if agent is running
+        if processes.get('trading_agent') and processes['trading_agent'].poll() is None:
+            status['status'] = 'פעיל'
+            
+            # Try to get more details from agent files
+            agent_dir = Path('agent')
+            if agent_dir.exists():
+                # Check state file
+                state_file = agent_dir / 'state.json'
+                if state_file.exists():
+                    with open(state_file, 'r', encoding='utf-8') as f:
+                        agent_state = json.load(f)
+                        status['ibkr_connected'] = agent_state.get('connected', False)
+                        status['last_action'] = agent_state.get('last_action', '-')
+                        
+                # Check configuration
+                config = load_system_config()
+                status['test_mode'] = config.get('agent_settings', {}).get('TEST_MODE_ENABLED', True)
+                
+                # Check if model exists
+                model_path = Path('models/champion_model.pkl')
+                status['active_model'] = 'טעון' if model_path.exists() else 'לא טעון'
+        
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({"error": f"Failed to get agent status: {e}"}), 500
+
+@app.route('/api/agent/positions', methods=['GET'])
+def get_agent_positions():
+    """Get trading agent positions."""
+    try:
+        positions = []
+        
+        # Try to read positions from agent state or database
+        agent_dir = Path('agent')
+        if agent_dir.exists():
+            state_file = agent_dir / 'state.json'
+            if state_file.exists():
+                with open(state_file, 'r', encoding='utf-8') as f:
+                    agent_state = json.load(f)
+                    positions = agent_state.get('positions', [])
+        
+        return jsonify({'positions': positions})
+    except Exception as e:
+        return jsonify({"error": f"Failed to get agent positions: {e}"}), 500
+
+@app.route('/api/agent/orders', methods=['GET'])
+def get_agent_orders():
+    """Get trading agent orders."""
+    try:
+        orders = []
+        
+        # Try to read orders from agent logs or database
+        agent_dir = Path('agent')
+        if agent_dir.exists():
+            log_file = agent_dir / 'trading_log.txt'
+            if log_file.exists():
+                # Parse recent orders from log file
+                with open(log_file, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()[-50:]  # Last 50 lines
+                    for line in lines:
+                        if 'ORDER' in line.upper():
+                            # Parse order information from log
+                            # This is a simplified example
+                            parts = line.strip().split()
+                            if len(parts) >= 6:
+                                order = {
+                                    'time': parts[0] + ' ' + parts[1],
+                                    'symbol': 'SPY',
+                                    'type': 'BUY' if 'BUY' in line.upper() else 'SELL',
+                                    'quantity': '1',
+                                    'price': '0.00',
+                                    'status': 'Filled'
+                                }
+                                orders.append(order)
+        
+        return jsonify({'orders': orders})
+    except Exception as e:
+        return jsonify({"error": f"Failed to get agent orders: {e}"}), 500
+
+@app.route('/api/agent/logs', methods=['GET'])
+def get_agent_logs():
+    """Get trading agent logs."""
+    try:
+        logs = []
+        
+        agent_dir = Path('agent')
+        if agent_dir.exists():
+            log_file = agent_dir / 'trading_log.txt'
+            if log_file.exists():
+                with open(log_file, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()[-100:]  # Last 100 lines
+                    for line in lines:
+                        if line.strip():
+                            # Parse timestamp and message
+                            parts = line.strip().split(' ', 2)
+                            if len(parts) >= 3:
+                                log = {
+                                    'timestamp': parts[0] + ' ' + parts[1],
+                                    'message': ' '.join(parts[2:])
+                                }
+                                logs.append(log)
+        
+        return jsonify({'logs': logs})
+    except Exception as e:
+        return jsonify({"error": f"Failed to get agent logs: {e}"}), 500
+
+@app.route('/api/models/<ts>', methods=['DELETE'])
+def delete_model(ts):
+    """Delete a specific model by timestamp."""
+    try:
+        models_dir = Path('models')
+        model_path = models_dir / ts
+        
+        if not model_path.exists():
+            return jsonify({"error": f"Model {ts} not found"}), 404
+        
+        # Check if it's a directory or file
+        if model_path.is_dir():
+            # Remove the entire directory
+            shutil.rmtree(model_path)
+        else:
+            # Remove the file
+            model_path.unlink()
+        
+        return jsonify({"message": f"Model {ts} deleted successfully"})
+    except Exception as e:
+        return jsonify({"error": f"Failed to delete model {ts}: {e}"}), 500
+
+def is_ibkr_available():
+    """Check if IBKR Gateway/TWS is available.
+    
+    Returns:
+        tuple: (is_available, host, port, error_message)
+            - is_available (bool): True if IBKR is accessible
+            - host (str): The IBKR host
+            - port (int): The IBKR port
+            - error_message (str): Error message if not available, empty string otherwise
+    """
+    try:
+        config = load_system_config()
+        ibkr_settings = config.get('ibkr_settings', {})
+        host = ibkr_settings.get('host', '127.0.0.1')
+        port = int(ibkr_settings.get('port', 4001))
+        
+        # Try to connect to IBKR port
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(3)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        
+        if result == 0:
+            return True, host, port, ""
+        else:
+            error_msg = f"IBKR Gateway/TWS is not accessible on {host}:{port}. Make sure it's running and API is enabled."
+            return False, host, port, error_msg
+    except Exception as e:
+        return False, "unknown", 0, f"Failed to check IBKR status: {e}"
+
+def get_ibkr_gateway_path():
+    """Get the path to IBKR Gateway executable from system config."""
+    config = load_system_config()
+    ibkr_settings = config.get('ibkr_settings', {})
+    return ibkr_settings.get('gateway_path', '')
+
+def update_ibcontroller_config(username='', password=''):
+    """Update IBController.ini file with new credentials."""
+    ibcontroller_ini_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'IBController', 'IBController.ini')
+    
+    if not os.path.exists(ibcontroller_ini_path):
+        raise FileNotFoundError(f"IBController.ini not found at {ibcontroller_ini_path}")
+    
+    # Read the current file
+    with open(ibcontroller_ini_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+    
+    # Update the lines
+    updated_lines = []
+    for line in lines:
+        if line.startswith('IbLoginId=') and username:
+            updated_lines.append(f'IbLoginId={username}\n')
+        elif line.startswith('IbPassword=') and password:
+            updated_lines.append(f'IbPassword={password}\n')
+        else:
+            updated_lines.append(line)
+    
+    # Write back to file
+    with open(ibcontroller_ini_path, 'w', encoding='utf-8') as f:
+        f.writelines(updated_lines)
+    
+    logger.info(f"Updated IBController.ini with new credentials")
+
+@app.route('/api/ibkr/start', methods=['POST'])
+def start_ibkr_gateway():
+    """Start IBKR Gateway application using IBController in background."""
+    is_available, _, _, _ = is_ibkr_available()
+    if is_available:
+        return jsonify({
+            "status": "already_running",
+            "message": "IBKR Gateway is already running"
+        })
+    
+    # Kill any existing Java processes to avoid conflicts
+    try:
+        subprocess.run(["taskkill", "/F", "/IM", "java.exe"], 
+                      capture_output=True, check=False)
+    except:
+        pass  # Ignore if no Java processes found
+    
+    # Use the fixed IBController script
+    ibcontroller_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'IBController', 'StartGatewayFixed.bat')
+    
+    if not os.path.exists(ibcontroller_path):
+        return jsonify({
+            "status": "error",
+            "message": "IBController script not found. Please ensure StartGatewayFixed.bat exists."
+        }), 500
+    
+    try:
+        # Run IBController in background (hidden)
+        proc = subprocess.Popen(
+            [ibcontroller_path],
+            shell=True,
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE,
+            cwd=os.path.dirname(ibcontroller_path),
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+        )
+        
+        # Check if process started successfully
+        time.sleep(2)
+        if proc.poll() is not None:
+            out, err = proc.communicate()
+            error_message = err.decode('utf-8', errors='replace')
+            return jsonify({
+                "status": "error",
+                "message": f"Failed to start IBKR Gateway with IBController: {error_message}",
+                "error": error_message
+            }), 500
+            
+        return jsonify({
+            "status": "starting",
+            "message": "IBKR Gateway is starting with IBController auto-login. Please wait...",
+            "pid": proc.pid,
+            "method": "IBController"
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to start IBKR Gateway: {str(e)}",
+            "error": str(e)
+        }), 500
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to start IBKR Gateway: {str(e)}",
+            "error": str(e)
+        }), 500
+        f.write("ForceTwoFactorAuth=no\n")
+        f.write("TradingMode=live\n")
+        f.write("IbDir={}\n".format(gateway_dir))
+        f.write("AcceptIncomingConnectionAction=accept\n")
+        f.write("ShowAllTrades=no\n")
+        f.write("ExistingSessionDetectedAction=primary\n")
+        f.write("MinimizeMainWindow=yes\n")
+        f.write("EnableApiPrecautions=no\n")
+        f.write("ReadOnlyApi=no\n")
+        f.write("LogComponents=never\n")
+        f.write("LogLevel=error\n")
+        f.write("ForceTls=no\n")
+    
+    # 1. Try using PyAutoGUI for GUI interaction - based on exact screen layout from screenshot
+    if PYAUTOGUI_AVAILABLE:
+        try:
+            # Start Gateway with no arguments
+            proc = subprocess.Popen(
+                [gateway_path],
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+            )
+            
+            # Define auto-login function in a separate thread
+            def autologin_thread():
+                try:
+                    # Wait for the login window to appear - IBKR Gateway takes some time to initialize
+                    print("Waiting for IBKR Gateway login window...")
+                    time.sleep(5)  # Increased wait time to ensure window is fully loaded
+                    
+                    # Get screen dimensions
+                    screen_width, screen_height = pyautogui.size()
+                    print(f"Screen dimensions: {screen_width}x{screen_height}")
+                    
+                    # Based on the screenshot, username field is in the center of the window
+                    # Try to locate red login window - aim for the center of the window first
+                    center_x = screen_width // 2
+                    center_y = screen_height // 2
+                    
+                    # From the screenshot, we can see the username field is centered horizontally
+                    # and about 1/3 of the way down from the top of the login dialog
+                    # The window appears to be about 600px wide and 400px high
+                    
+                    # First, click somewhere in the window to make sure it's active
+                    pyautogui.moveTo(center_x, center_y - 100)  # Move to the title area of the dialog
+                    pyautogui.click()
+                    time.sleep(0.5)
+                    
+                    # Click directly in the username field (based on screenshot position)
+                    # Username field is about 60-70% down from the top of the window
+                    username_y = center_y + 40  # Adjusted based on screenshot
+                    pyautogui.moveTo(center_x, username_y)
+                    pyautogui.click()
+                    time.sleep(0.5)
+                    
+                    # Clear any existing text and type username
+                    pyautogui.hotkey('ctrl', 'a')  # Select all text
+                    pyautogui.press('delete')     # Delete selected text
+                    pyautogui.typewrite(username)
+                    print(f"Typed username: {username}")
+                    
+                    # Tab to password field
+                    pyautogui.press('tab')
+                    time.sleep(0.3)
+                    
+                    # Clear any existing text and type password
+                    pyautogui.hotkey('ctrl', 'a')  # Select all text
+                    pyautogui.press('delete')     # Delete selected text
+                    
+                    # הקלדת הסיסמה תו אחר תו
+                    pyautogui.hotkey('alt', 'shift')  # החלפת שפת מקלדת לאנגלית
+                    time.sleep(0.5)
+                    print("Typing password character by character")
+                    for char in password:
+                        pyautogui.press(char)
+                        time.sleep(0.2)  # המתנה ארוכה יותר בין תווים
+                    
+                    print("Typed password")
+                    
+                    # In the screenshot, there's a "Paper Log In" button at the bottom
+                    # We'll click where this button should be
+                    time.sleep(0.5)
+                    login_button_y = username_y + 80  # Approximately where the login button is
+                    pyautogui.moveTo(center_x, login_button_y)
+                    pyautogui.click()
+                    
+                    print("Clicked login button")
+                    
+                    # Wait a bit to see if additional security prompt appears
+                    time.sleep(4)
+                    
+                    # Check for any security prompts by trying to click common button positions
+                    for y_offset in [50, 100, 150]:  # Try a few different vertical positions
+                        try:
+                            pyautogui.moveTo(center_x, center_y + y_offset)
+                            pyautogui.click()
+                            print(f"Clicked at potential security prompt position: {center_x}, {center_y + y_offset}")
+                            time.sleep(1)
+                        except:
+                            pass
+                        
+                except Exception as e:
+                    print(f"Error in auto-login thread: {str(e)}")
+            
+            # Start the autologin thread
+            threading.Thread(target=autologin_thread).start()
+            
+            return jsonify({
+                "status": "starting",
+                "message": "IBKR Gateway is starting with GUI automation specifically tuned to the login screen. Please wait and don't use your mouse/keyboard for a few seconds.",
+                "pid": proc.pid,
+                "method": "GUI automation (precise)"
+            })
+            
+        except Exception as e:
+            print(f"Error using PyAutoGUI method: {str(e)}")
+            # Fall through to next method
+            
+    # 2. Try modifying jts.ini directly - based on specific jts.ini structure from IBKR Gateway 1037
+    jts_ini_path = os.path.join(gateway_dir, "jts.ini")
+    if os.path.exists(jts_ini_path):
+        try:
+            # Backup original jts.ini
+            backup_path = jts_ini_path + ".bak"
+            shutil.copy(jts_ini_path, backup_path)
+            print(f"Created backup of jts.ini at {backup_path}")
+            
+            # Read the existing file content
+            with open(jts_ini_path, 'r') as f:
+                content = f.read()
+            
+            # Parse the INI content into sections
+            sections = {}
+            current_section = None
+            section_content = []
+            
+            for line in content.split('\n'):
+                line = line.rstrip()
+                if line.startswith('[') and line.endswith(']'):
+                    # Save previous section if exists
+                    if current_section is not None:
+                        sections[current_section] = section_content
+                    
+                    # Start new section
+                    current_section = line
+                    section_content = [line]
+                else:
+                    if current_section is not None:
+                        section_content.append(line)
+            
+            # Add the last section
+            if current_section is not None:
+                sections[current_section] = section_content
+            
+            # Modify the [IBGateway] section
+            if '[IBGateway]' in sections:
+                ibgateway_section = sections['[IBGateway]']
+                
+                # Remove any existing autologin settings
+                ibgateway_section = [line for line in ibgateway_section if not any(
+                    key in line for key in ['StoreSettingsOnServer', 'AutoLogon', 'SaveIBCPassword'])]
+                
+                # Add new settings
+                ibgateway_section.append(f"StoreSettingsOnServer=false")
+                ibgateway_section.append(f"AutoLogon=true")
+                ibgateway_section.append(f"SaveIBCPassword=true")
+                
+                sections['[IBGateway]'] = ibgateway_section
+            
+            # Modify the [Logon] section
+            if '[Logon]' in sections:
+                logon_section = sections['[Logon]']
+                
+                # Remove any existing credential settings
+                logon_section = [line for line in logon_section if not any(
+                    key in line for key in ['individual', 'password', 'AutoLogin', 'ForceTwoFactorAuth', 'SsoLoginCmdLineParam', 'SsoResponse'])]
+                
+                # Add credential settings
+                logon_section.append(f"individual={username}")
+                logon_section.append(f"password={password}")
+                logon_section.append(f"AutoLogin=true")
+                logon_section.append(f"ForceTwoFactorAuth=false")
+                logon_section.append(f"RememberLastUserId=true")
+                
+                sections['[Logon]'] = logon_section
+            else:
+                # Create Logon section if it doesn't exist
+                sections['[Logon]'] = [
+                    '[Logon]',
+                    f"individual={username}",
+                    f"password={password}",
+                    "AutoLogin=true",
+                    "ForceTwoFactorAuth=false",
+                    "RememberLastUserId=true"
+                ]
+            
+            # Combine all sections back to a single string
+            new_content = []
+            for section_name, section_lines in sections.items():
+                new_content.extend(section_lines)
+                new_content.append('')  # Add empty line between sections
+            
+            # Write the updated content back to the file
+            with open(jts_ini_path, 'w') as f:
+                f.write('\n'.join(new_content))
+            
+            print(f"Successfully updated jts.ini with enhanced login settings")
+            
+            # Create auto-login script to trigger after starting Gateway
+            auto_login_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'auto_login.vbs')
+            with open(auto_login_file, 'w') as f:
+                f.write('WScript.Sleep 2000\n')  # Wait 2 seconds
+                f.write('Set WshShell = WScript.CreateObject("WScript.Shell")\n')
+                f.write(f'WshShell.SendKeys "{username}"\n')
+                f.write('WshShell.SendKeys "{TAB}"\n')
+                f.write(f'WshShell.SendKeys "{password}"\n')
+                f.write('WshShell.SendKeys "{ENTER}"\n')
+            
+            print(f"Created auto-login script at {auto_login_file}")
+            
+            # Start Gateway with the modified jts.ini and then run the auto-login script
+            proc = subprocess.Popen(
+                [gateway_path],
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+            )
+            
+            # Start the auto-login script after a delay
+            def run_autologin_script():
+                time.sleep(3)  # Wait for Gateway to start
+                try:
+                    subprocess.Popen(['wscript', auto_login_file])
+                    print("Started auto-login script")
+                except Exception as e:
+                    print(f"Error starting auto-login script: {str(e)}")
+            
+            # Start the auto-login script in a separate thread
+            threading.Thread(target=run_autologin_script).start()
+            
+            return jsonify({
+                "status": "starting",
+                "message": "IBKR Gateway is starting with enhanced jts.ini settings and auto-login script. Please wait...",
+                "pid": proc.pid,
+                "method": "Enhanced jts.ini + auto-login script"
+            })
+            
+        except Exception as e:
+            print(f"Error modifying jts.ini: {str(e)}")
+            # Fall through to next method
+    
+    
+    
+    # 3. Try using command line arguments directly
+    # Prepare all the different formats
+    command_formats = [
+        # Format 1: Username and password in IBC format
+        {
+            'args': [gateway_path, f'IbLoginId={username}', f'IbPassword={password}', 'StorePassword=yes'],
+            'name': 'IBC Login Format'
+        },
+        # Format 2: Standard TWS CLI format
+        {
+            'args': [gateway_path, f'username={username}', f'password={password}'],
+            'name': 'TWS Login Format'
+        },
+        # Format 3: Standard argument format
+        {
+            'args': [gateway_path, '--user', username, '--pw', password],
+            'name': 'Standard Args Format'
+        },
+        # Format 4: Windows-style switches
+        {
+            'args': [gateway_path, f'/username:{username}', f'/password:{password}'],
+            'name': 'Windows Switch Format'
+        },
+        # Format 5: Simple equals format
+        {
+            'args': [gateway_path, f'--user={username}', f'--pw={password}'],
+            'name': 'Equals Format'
+        },
+        # Format 6: Just start without args as fallback
+        {
+            'args': [gateway_path],
+            'name': 'No Arguments'
+        }
+    ]
+    
+    # Try each format
+    errors = []
+    for i, format_info in enumerate(command_formats):
+        args = format_info['args']
+        name = format_info['name']
+        
+        try:
+            print(f"Trying command format {i+1}/{len(command_formats)}: {name}")
+            proc = subprocess.Popen(
+                args,
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+            )
+            
+            # Wait briefly to see if it immediately fails
+            time.sleep(0.5)
+            if proc.poll() is not None:
+                out, err = proc.communicate()
+                error_msg = f"Format {name} failed immediately: {err.decode('utf-8', errors='replace')}"
+                print(error_msg)
+                errors.append(error_msg)
+                continue
+            
+            return jsonify({
+                "status": "starting",
+                "message": f"IBKR Gateway is starting with {name}. Please wait...",
+                "pid": proc.pid,
+                "method": name
+            })
+            
+        except Exception as e:
+            error_msg = f"Error with {name}: {str(e)}"
+            print(error_msg)
+            errors.append(error_msg)
+    
+    # If all formats failed
+    return jsonify({
+        "status": "error",
+        "message": "Failed to start IBKR Gateway with all attempted methods",
+        "errors": errors
+    }), 500
+
+@app.route('/api/ibkr/stop', methods=['POST'])
+def stop_ibkr_gateway():
+    """Stop IBKR Gateway application (if possible)."""
+    is_available, host, port, _ = is_ibkr_available()
+    if not is_available:
+        return jsonify({
+            "status": "not_running",
+            "message": "IBKR Gateway is not running"
+        })
+    
+    try:
+        if sys.platform == 'win32':
+            # On Windows, try to find and terminate the process
+            os.system('taskkill /f /im "IB Gateway.exe" /t')
+            os.system('taskkill /f /im "tws.exe" /t')
+        else:
+            # On Linux/Mac, more complex - beyond scope of simple example
+            pass
+            
+        return jsonify({
+            "status": "stopping",
+            "message": "Sent termination signal to IBKR Gateway. This may take a moment to complete."
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to stop IBKR Gateway: {str(e)}",
+            "error": str(e)
+        }), 500
+
+@app.route('/api/ibkr/config', methods=['GET', 'POST'])
+def ibkr_config():
+    """Get or update IBKR Gateway configuration."""
+    config = load_system_config()
+    ibkr_settings = config.get('ibkr_settings', {})
+    
+    if request.method == 'POST':
+        try:
+            data = request.json
+            
+            # Update IBKR settings (only if provided)
+            if 'host' in data:
+                ibkr_settings['host'] = data['host']
+            if 'port' in data:
+                ibkr_settings['port'] = int(data['port'])
+            if 'gateway_path' in data:
+                ibkr_settings['gateway_path'] = data['gateway_path']
+            if 'username' in data:
+                ibkr_settings['username'] = data['username']
+            if 'clientId' in data:
+                ibkr_settings['clientId'] = int(data['clientId'])
+            
+            # Store password if requested
+            if data.get('store_password') and 'password' in data:
+                ibkr_settings['password'] = data['password']
+            
+            # Update config
+            config['ibkr_settings'] = ibkr_settings
+            save_system_config(config)
+            
+            # Also update IBController.ini if username/password provided
+            if 'username' in data or ('password' in data and data.get('store_password')):
+                try:
+                    update_ibcontroller_config(
+                        username=data.get('username', ibkr_settings.get('username', '')),
+                        password=data.get('password', '') if data.get('store_password') else ''
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to update IBController.ini: {e}")
+            
+            return jsonify({
+                "status": "success",
+                "message": "IBKR Gateway configuration updated successfully"
+            })
+        except Exception as e:
+            return jsonify({
+                "status": "error",
+                "message": f"Failed to update IBKR Gateway configuration: {str(e)}",
+                "error": str(e)
+            }), 500
+    
+    # Remove sensitive info before returning
+    safe_settings = {k: v for k, v in ibkr_settings.items() if k != 'password'}
+    if 'password' in ibkr_settings:
+        safe_settings['has_password'] = True
+    
+    return jsonify({
+        "settings": safe_settings
+    })
+    
+@app.route('/api/ibkr/clear-credentials', methods=['POST'])
+def clear_ibkr_credentials():
+    """Clear IBKR username and password from the configuration."""
+    try:
+        config = load_system_config()
+        ibkr_settings = config.get('ibkr_settings', {})
+        
+        # Remove username and password
+        if 'username' in ibkr_settings:
+            del ibkr_settings['username']
+        if 'password' in ibkr_settings:
+            del ibkr_settings['password']
+        
+        # Update config
+        config['ibkr_settings'] = ibkr_settings
+        save_system_config(config)
+        
+        return jsonify({
+            "status": "success",
+            "message": "IBKR credentials cleared successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to clear IBKR credentials: {str(e)}",
+            "error": str(e)
+        }), 500
+
+@app.route('/api/ibkr/status', methods=['GET'])
+def check_ibkr_status():
+    """Check the status of IBKR Gateway connection."""
+    is_available, host, port, error_msg = is_ibkr_available()
+    
+    if is_available:
+        return jsonify({
+            "status": "available",
+            "host": host,
+            "port": port,
+            "message": "IBKR Gateway is accessible"
+        })
+    else:
+        return jsonify({
+            "status": "unavailable",
+            "host": host,
+            "port": port,
+            "message": error_msg
+        })
+
+@app.route('/api/system/cleanup', methods=['POST'])
+def cleanup_system():
+    """
+    מנקה את הפרויקט למצב התחלתי.
+    פעולה זו מעבירה קבצים לא נדרשים לארכיון ומארגנת את מבנה התיקיות.
+    """
+    try:
+        # יצירת תיקיות ארכיון אם לא קיימות
+        os.makedirs('archive/logs', exist_ok=True)
+        os.makedirs('archive/old_scripts', exist_ok=True)
+        os.makedirs('archive/temp', exist_ok=True)
+        os.makedirs('logs', exist_ok=True)
+        
+        # העברת קבצי לוג ישנים לארכיון
+        log_files_to_archive = []
+        for root, _, files in os.walk('.'):
+            if 'archive' in root or '.git' in root:
+                continue
+                
+            for file in files:
+                if file.endswith('.log') and root != './logs' and not root.startswith('./logs'):
+                    log_files_to_archive.append(os.path.join(root, file))
+        
+        # העברת הקבצים לארכיון
+        archived_files = []
+        for file_path in log_files_to_archive:
+            try:
+                archive_path = os.path.join('archive/logs', os.path.basename(file_path))
+                shutil.move(file_path, archive_path)
+                archived_files.append(file_path)
+            except Exception as e:
+                print(f"Could not archive {file_path}: {e}")
+        
+        # ניקוי קבצי batch עודפים
+        batch_files_to_archive = []
+        for file in os.listdir('.'):
+            if file.endswith('.bat') and file != 'run_server.bat':
+                batch_files_to_archive.append(file)
+                
+        for file in batch_files_to_archive:
+            try:
+                archive_path = os.path.join('archive/old_scripts', file)
+                shutil.move(file, archive_path)
+                archived_files.append(file)
+            except Exception as e:
+                print(f"Could not archive {file}: {e}")
+        
+        # ניקוי קבצי temp
+        temp_files = []
+        if os.path.exists('temp'):
+            for file in os.listdir('temp'):
+                temp_files.append(os.path.join('temp', file))
+                
+            for file in temp_files:
+                try:
+                    archive_path = os.path.join('archive/temp', os.path.basename(file))
+                    shutil.move(file, archive_path)
+                    archived_files.append(file)
+                except Exception as e:
+                                        print(f"Could not archive {file}: {e}")
+                    
+        # הכנת תיקיות נדרשות
+        required_dirs = ['data/raw', 'data/processed', 'models', 'logs', 'reports/backtest_results']
+        for directory in required_dirs:
+            os.makedirs(directory, exist_ok=True)
+        
+        return jsonify({
+            "status": "success",
+            "message": "הפרויקט נוקה למצב התחלתי בהצלחה",
+            "archived_files": archived_files,
+            "prepared_directories": required_dirs
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error", 
+            "message": f"שגיאה בניקוי הפרויקט: {str(e)}",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+if __name__ == '__main__':
+    import sys
+    import os
+    
+    # Show output in terminal (do not redirect to log file)
+    try:
+        print("=== Starting Server ===")
+        print(f"Python version: {sys.version}")
+        print(f"Working directory: {os.getcwd()}")
+        
+        # Start background monitoring thread
+        monitor_thread = threading.Thread(target=background_monitor, daemon=True)
+        monitor_thread.start()
+        
+        print("Starting advanced API server...")
+        if SOCKETIO_AVAILABLE:
+            print(f"WebSocket endpoint: ws://localhost:5002/socket.io/")
+            print(f"Caching: Enabled with smart change detection")
+        else:
+            print("Running without WebSocket support")
+        print(f"Dashboard: http://localhost:5002/")
+        
+        # Run with SocketIO if available, otherwise regular Flask
+        if SOCKETIO_AVAILABLE and socketio:
+            if EVENTLET_AVAILABLE:
+                # Use eventlet for better WebSocket performance
+                print("Using eventlet for WebSocket server.")
+                socketio.run(app, host='0.0.0.0', port=5002, debug=True)
+            else:
+                # Fall back to threading mode
+                print("Using threading mode for WebSocket server.")
+                socketio.run(app, host='0.0.0.0', port=5002, debug=True)
+        else:
+            print("Starting Flask development server...")
+            app.run(host='0.0.0.0', port=5002, debug=True)
+            
+    except Exception as e:
+        print(f"Error starting server: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        pass

@@ -1,0 +1,80 @@
+{
+  "recorded_at": "2025-07-21 19:14:20",
+  "screen_size": [
+    1920,
+    1080
+  ],
+  "duration": 5.0,
+  "actions_count": 7,
+  "recording_type": "manual",
+  "actions": [
+    {
+      "type": "click",
+      "delay": 1.0,
+      "params": {
+        "x_percent": 0.5,
+        "y_percent": 0.37037037037037035,
+        "button": "left",
+        "absolute_x": 960,
+        "absolute_y": 400
+      },
+      "timestamp": 1.0
+    },
+    {
+      "type": "key_press",
+      "delay": 0.5,
+      "params": {
+        "key": "ctrl+a"
+      },
+      "timestamp": 1.5
+    },
+    {
+      "type": "write_username",
+      "delay": 0.3,
+      "params": {
+        "text": "{{USERNAME}}"
+      },
+      "timestamp": 1.8
+    },
+    {
+      "type": "click",
+      "delay": 0.5,
+      "params": {
+        "x_percent": 0.5,
+        "y_percent": 0.4166666666666667,
+        "button": "left",
+        "absolute_x": 960,
+        "absolute_y": 450
+      },
+      "timestamp": 2.3
+    },
+    {
+      "type": "key_press",
+      "delay": 0.3,
+      "params": {
+        "key": "ctrl+a"
+      },
+      "timestamp": 2.6
+    },
+    {
+      "type": "write_password",
+      "delay": 0.3,
+      "params": {
+        "text": "{{PASSWORD}}"
+      },
+      "timestamp": 2.9
+    },
+    {
+      "type": "click",
+      "delay": 1.0,
+      "params": {
+        "x_percent": 0.5,
+        "y_percent": 0.46296296296296297,
+        "button": "left",
+        "absolute_x": 960,
+        "absolute_y": 500
+      },
+      "timestamp": 3.9
+    }
+  ]
+}

@@ -31,6 +31,10 @@ venv/
 env/
 ENV/
 
+# Environment variables
+.env
+*.env
+
 # Node.js
 node_modules/
 npm-debug.log*

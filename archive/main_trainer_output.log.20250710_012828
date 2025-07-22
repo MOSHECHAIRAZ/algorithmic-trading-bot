@@ -1,9 +1,0 @@
-2025-07-10 01:26:48,998 INFO --- Starting New Training Pipeline (Bias Corrected) ---
-2025-07-10 01:26:49,031 INFO Loaded data from 2010-07-07 00:00:00 to 2025-07-07 00:00:00. Shape: (3773, 8)
-2025-07-10 01:26:49,031 INFO Step 1: Generating features for train and test sets (no look-ahead bias)...
-2025-07-10 01:26:49,031 INFO --- Applying pandas_ta indicators ---
-2025-07-10 01:26:49,798 INFO --- Applying ta-lib indicators ---
-2025-07-10 01:26:49,831 WARNING Could not load or merge market regimes from C:\Users\משה\פרויקט קופילוט למידת מכונה\data\features\market_regimes.csv. Defaulting to 0. Error: Cannot join tz-naive with tz-aware DatetimeIndex
-2025-07-10 01:26:49,835 INFO --- Applying pandas_ta indicators ---
-2025-07-10 01:26:50,303 INFO --- Applying ta-lib indicators ---
-2025-07-10 01:26:50,313 WARNING Could not load or merge market regimes from C:\Users\משה\פרויקט קופילוט למידת מכונה\data\features\market_regimes.csv. Defaulting to 0. Error: Cannot join tz-naive with tz-aware DatetimeIndex

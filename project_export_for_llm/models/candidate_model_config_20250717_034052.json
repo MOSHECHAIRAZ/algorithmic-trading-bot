@@ -1,0 +1,30 @@
+{
+  "training_run_timestamp": "20250717_034052",
+  "optuna_study_name": "spy_strategy_total_return_20250717_034052",
+  "selected_features": [
+    "DPO_20",
+    "vix_close",
+    "NATR_14",
+    "AR_26",
+    "TSIs_13_25_13",
+    "EBSW_40_10"
+  ],
+  "params": {
+    "horizon": 15,
+    "threshold": 0.06234265170620584,
+    "top_n_features": 6
+  },
+  "scaler": true,
+  "risk_params": {
+    "stop_loss_pct": null,
+    "take_profit_pct": null,
+    "risk_per_trade": null
+  },
+  "contract": {
+    "symbol": "SPY",
+    "secType": "STK",
+    "exchange": "SMART",
+    "currency": "USD",
+    "primaryExch": "ARCA"
+  }
+}

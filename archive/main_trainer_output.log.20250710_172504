@@ -1,3 +1,0 @@
-2025-07-10 17:24:56,894 INFO --- Starting New Training Pipeline (Full Strategy Optimization with Custom Metric) ---
-2025-07-10 17:24:56,939 INFO Loaded data from 2010-07-15 00:00:00 to 2025-07-10 00:00:00. Shape: (3770, 8)
-2025-07-10 17:24:56,939 INFO Step 1: Generating all features...

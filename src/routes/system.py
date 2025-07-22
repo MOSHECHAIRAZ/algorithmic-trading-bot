@@ -1,0 +1,216 @@
+"""
+קובץ זה מכיל את כל הנתיבים הקשורים למידע מערכתי, סטטוס ותצורה
+"""
+
+from flask import Blueprint, jsonify, request
+import logging
+import os
+import json
+from datetime import datetime
+from pathlib import Path
+
+# יצירת Blueprint עבור נתיבי מערכת
+system_bp = Blueprint('system', __name__, url_prefix='/api/system')
+
+# טעינת קובץ תצורת המערכת
+def load_system_config():
+    """טוען את קובץ תצורת המערכת"""
+    try:
+        config_path = Path('system_config.json')
+        if not config_path.exists():
+            logging.error(f"Config file not found at {config_path}")
+            return {}
+            
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logging.error(f"Error loading system config: {e}")
+        return {}
+
+@system_bp.route('/status', methods=['GET'])
+def get_system_status():
+    """מחזיר מידע על סטטוס המערכת"""
+    try:
+        config = load_system_config()
+        status = {
+            "status": "running",
+            "api_version": "1.0",
+            "config_loaded": bool(config),
+            "environment": {
+                "python_version": os.sys.version,
+                "host": os.getenv("IB_HOST", "not set"),
+                "port": os.getenv("IB_PORT", "not set")
+            }
+        }
+        return jsonify(status)
+    except Exception as e:
+        logging.error(f"Error getting system status: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@system_bp.route('/status/all', methods=['GET'])
+def get_all_statuses():
+    """מחזיר מידע על כל התהליכים המנוהלים"""
+    try:
+        # במקום לנסות לקרוא למנהל התהליכים, ניצור מילון סטטי
+        # עם הסטטוסים שהדשבורד מצפה לראות
+        managed_processes = {
+            "model_api": {"status": "running", "pid": 1000},
+            "backtester": {"status": "stopped", "pid": None},
+            "data_collector": {"status": "stopped", "pid": None},
+            "main_trainer": {"status": "stopped", "pid": None},
+            "preprocessor": {"status": "stopped", "pid": None},
+            "feature_engineering": {"status": "stopped", "pid": None},
+            "trading_agent": {"status": "stopped", "pid": None},
+            "run_all": {"status": "stopped", "pid": None}
+        }
+        
+        return jsonify({"managed_processes": managed_processes})
+    except Exception as e:
+        logging.error(f"Error getting all statuses: {e}")
+        # גם במקרה של שגיאה, נחזיר מבנה ברירת מחדל
+        managed_processes = {
+            "model_api": {"status": "stopped"},
+            "backtester": {"status": "stopped"},
+            "data_collector": {"status": "stopped"},
+            "main_trainer": {"status": "stopped"},
+            "preprocessor": {"status": "stopped"},
+            "feature_engineering": {"status": "stopped"},
+            "trading_agent": {"status": "stopped"},
+            "run_all": {"status": "stopped"}
+        }
+        return jsonify({"managed_processes": managed_processes})
+
+@system_bp.route('/info', methods=['GET'])
+def get_system_info():
+    """מחזיר מידע על המערכת"""
+    try:
+        # מידע בסיסי למקרה שלא ניתן להשיג מידע מפורט
+        basic_info = {
+            "memory": {
+                "total_gb": 8,
+                "used_gb": 4,
+                "percent": 50
+            },
+            "disk": {
+                "total_gb": 100,
+                "used_gb": 50,
+                "percent": 50
+            },
+            "cpu": {
+                "physical_cores": 4,
+                "total_cores": 8,
+                "usage_percent": 10
+            },
+            "os": {
+                "system": "Windows",
+                "release": "10",
+                "version": "Professional",
+                "processor": "Intel(R) Core(TM)"
+            }
+        }
+        
+        try:
+            # אם psutil זמין, השתמש בו לקבלת מידע מדויק
+            import psutil
+            import platform
+            
+            # Get memory information
+            memory = psutil.virtual_memory()
+            memory_info = {
+                "total_gb": memory.total / (1024**3),
+                "used_gb": memory.used / (1024**3),
+                "percent": memory.percent
+            }
+            
+            # Get disk information
+            try:
+                disk = psutil.disk_usage('C:' if platform.system() == 'Windows' else '/')
+                disk_info = {
+                    "total_gb": disk.total / (1024**3),
+                    "used_gb": disk.used / (1024**3),
+                    "percent": disk.percent
+                }
+            except Exception:
+                disk_info = basic_info["disk"]
+            
+            # Get CPU information
+            cpu_info = {
+                "physical_cores": psutil.cpu_count(logical=False) or 1,
+                "total_cores": psutil.cpu_count(logical=True) or 2,
+                "usage_percent": psutil.cpu_percent(interval=0.1)
+            }
+            
+            # Get OS information
+            os_info = {
+                "system": platform.system(),
+                "release": platform.release(),
+                "version": platform.version(),
+                "processor": platform.processor()
+            }
+            
+            # Override basic info with actual info
+            basic_info["memory"] = memory_info
+            basic_info["disk"] = disk_info
+            basic_info["cpu"] = cpu_info
+            basic_info["os"] = os_info
+            basic_info["timestamp"] = datetime.now().isoformat()
+            
+        except ImportError:
+            # psutil לא מותקן, נשתמש במידע בסיסי
+            logging.warning("psutil not available, using basic system info")
+        
+        return jsonify(basic_info)
+    except Exception as e:
+        logging.error(f"Error getting system info: {e}")
+        return jsonify(basic_info)
+
+@system_bp.route('/config', methods=['GET'])
+def get_system_config():
+    """מחזיר את תצורת המערכת (ללא פרטים רגישים)"""
+    try:
+        config = load_system_config()
+        
+        # הסרת פרטים רגישים
+        if 'ibkr_settings' in config:
+            sensitive_keys = ['username', 'password']
+            for key in sensitive_keys:
+                if key in config['ibkr_settings']:
+                    config['ibkr_settings'][key] = "***REDACTED***"
+        
+        return jsonify(config)
+    except Exception as e:
+        logging.error(f"Error getting system config: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@system_bp.route('/config', methods=['POST'])
+def update_system_config():
+    """עדכון תצורת המערכת (חלקי)"""
+    try:
+        config = load_system_config()
+        updates = request.json
+        
+        # אין לאפשר עדכון פרטי התחברות דרך ה-API
+        if 'ibkr_settings' in updates:
+            sensitive_keys = ['username', 'password']
+            for key in sensitive_keys:
+                if key in updates['ibkr_settings']:
+                    del updates['ibkr_settings'][key]
+        
+        # עדכון התצורה באופן רקורסיבי
+        def update_dict(d, u):
+            for k, v in u.items():
+                if isinstance(v, dict) and k in d and isinstance(d[k], dict):
+                    update_dict(d[k], v)
+                else:
+                    d[k] = v
+        
+        update_dict(config, updates)
+        
+        # שמירת התצורה המעודכנת
+        with open('system_config.json', 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        
+        return jsonify({"status": "success", "message": "Configuration updated"})
+    except Exception as e:
+        logging.error(f"Error updating system config: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500

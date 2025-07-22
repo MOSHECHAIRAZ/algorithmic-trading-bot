@@ -30,8 +30,10 @@
   "ibkr_settings": {
     "host": "127.0.0.1",
     "port": 4001,
-    "clientId": 1,
-    "history_window": "90 D"
+    "clientId": 101,
+    "history_window": "90 D",
+    "gateway_path": "C:\\Jts\\ibgateway\\1037\\ibgateway.exe",
+    "use_env_credentials": true
   },
   "agent_settings": {
     "TEST_MODE_ENABLED": true,
@@ -42,53 +44,81 @@
     "horizon": {
       "min": 3,
       "max": 20,
+      "fixed_value": 3,
       "optimize": true
     },
     "threshold": {
       "min": 0.005,
       "max": 0.03,
+      "fixed_value": 0.005,
       "optimize": true
     },
     "top_n_features": {
       "min": 20,
       "max": 100,
+      "fixed_value": 20,
       "optimize": true
     },
     "stop_loss_pct": {
-      "min": 1.0,
-      "max": 5.0,
+      "min": 1,
+      "max": 5,
+      "fixed_value": 1,
       "optimize": true
     },
     "take_profit_pct": {
-      "min": 1.0,
-      "max": 10.0,
+      "min": 1,
+      "max": 10,
+      "fixed_value": 1,
       "optimize": true
     },
     "risk_per_trade": {
       "min": 0.01,
       "max": 0.05,
+      "fixed_value": 0.01,
       "optimize": true
     },
     "learning_rate": {
       "min": 0.001,
       "max": 0.1,
+      "fixed_value": 0.001,
       "optimize": true
     },
     "n_estimators": {
       "min": 50,
       "max": 300,
+      "fixed_value": 50,
       "optimize": true
     },
     "max_depth": {
       "min": 3,
       "max": 10,
+      "fixed_value": 3,
       "optimize": true
     }
   },
   "system_paths": {
-    "preprocessed_data": "data/processed/SPY_processed.csv",
+    "raw_data": "data/raw/SPY_ibkr.csv",
+    "vix_data": "data/raw/VIX_ibkr.csv",
+    "processed_data": "data/processed/SPY_processed.csv",
     "feature_data": "data/processed/SPY_features.csv",
-    "champion_model": "models/champion_model.pkl"
+    "champion_model": "models/champion_model.pkl",
+    "champion_scaler": "models/champion_scaler.pkl",
+    "champion_config": "models/champion_model_config.json",
+    "backtest_results": "reports/backtest_results",
+    "logs_dir": "logs",
+    "archive_dir": "archive"
   },
-  "processed_data_path": "data/processed/SPY_features.csv"
+  "project_organization": {
+    "auto_organize_after_training": true,
+    "auto_organize_after_backtest": true,
+    "keep_latest_files": 3,
+    "archive_old_files": true,
+    "cleanup_temp_files": true,
+    "file_patterns": {
+      "models": ["*.pkl", "*.joblib", "*.h5"],
+      "data": ["*.csv", "*.parquet", "*.json"],
+      "logs": ["*.log", "*.txt"],
+      "temp": ["*.tmp", "*.temp", "*~", ".DS_Store", "Thumbs.db"]
+    }
+  }
 }

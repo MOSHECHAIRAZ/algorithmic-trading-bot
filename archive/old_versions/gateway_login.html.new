@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IB Gateway Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            width: 400px;
+            text-align: center;
+        }
+        
+        .login-container h2 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            text-align: right;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: bold;
+        }
+        
+        .form-group input[type="text"],
+        .form-group input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input[type="checkbox"] {
+            margin-left: 5px;
+        }
+        
+        .form-group input[type="text"]:focus,
+        .form-group input[type="password"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .login-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s;
+            margin-bottom: 10px;
+        }
+        
+        .login-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .test-btn {
+            background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
+            color: #2d3436;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s;
+        }
+        
+        .test-btn:hover {
+            transform: translateY(-1px);
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h2>IB Gateway Login</h2>
+        
+        <div style="background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 10px; border-radius: 5px; margin-bottom: 20px; text-align: right;">
+            <strong>שים לב:</strong> דף זה מפעיל את יישום Gateway. אם תיבחר באפשרות "מילוי אוטומטי", הפרטים יוזנו אוטומטית בחלון היישום שייפתח (לא בדף זה).
+        </div>
+        
+        <!-- סטטוס מאקרו -->
+        <div id="macro-status" style="background-color: #e2f3ff; border: 1px solid #b8daff; color: #004085; padding: 15px; border-radius: 5px; margin-top: 20px; margin-bottom: 20px; font-size: 14px; text-align: right; display: none;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <div id="macro-indicator" style="width: 12px; height: 12px; border-radius: 50%; background-color: #ccc;"></div>
+                <h3 id="macro-title" style="margin: 0; font-size: 16px;">בודק סטטוס מאקרו...</h3>
+            </div>
+            <p id="macro-description" style="margin: 0;">בודק אם קיים מאקרו התחברות מוקלט...</p>
+            <div id="macro-actions" style="margin-top: 10px; display: none;">
+                <button id="test-macro-btn" style="padding: 5px 10px; background-color: #17a2b8; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 13px;" onclick="testMacro()">בדיקת מאקרו</button>
+                <button id="delete-macro-btn" style="padding: 5px 10px; background-color: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 13px; margin-right: 5px;" onclick="deleteMacro()">מחיקת מאקרו</button>
+            </div>
+        </div>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">שם משתמש:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">סיסמה:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="auto-fill" name="autoFill" checked>
+                    <span>מילוי אוטומטי של נתוני ההתחברות</span>
+                </label>
+                <small style="color: #666; font-size: 12px;">אם כבוי, תצטרך להזין את הנתונים ידנית ב-Gateway</small>
+            </div>
+            
+            <button type="submit" class="login-btn">התחבר והפעל Gateway</button>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                <button type="button" class="test-btn" onclick="testAutoFill()" style="flex: 1;">בדיקת מילוי אוטומטי</button>
+                <button type="button" class="test-btn" id="use-macro-btn" style="flex: 1; background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%); color: white;">
+                    התחבר עם מאקרו מוקלט
+                </button>
+            </div>
+            <button type="button" class="test-btn" style="margin-top: 10px; background: linear-gradient(135deg, #a6c0fe 0%, #f68084 100%); color: #fff; width: 100%;" onclick="startWithMacroRecording()">
+                הפעל Gateway עם הקלטת מאקרו חדש
+            </button>
+        </form>
+        
+        <!-- תיבת פרטי מאקרו - מוסתרת כברירת מחדל -->
+        <div id="macro-details" style="display:none; margin-top: 20px; padding: 15px; background-color: #ffecd7; border: 1px solid #ffd5a0; border-radius: 5px;">
+            <h3 style="margin-top: 0; color: #804800; font-size: 18px;">הקלטת מאקרו התחברות</h3>
+            <p style="margin-bottom: 15px; font-size: 14px;">העתק את הפרטים הבאים והדבק אותם בחלון ה-Gateway שנפתח:</p>
+            
+            <div style="margin-bottom: 15px;">
+                <div style="font-weight: bold; margin-bottom: 5px;">שם משתמש:</div>
+                <div id="username-for-copy" style="padding: 8px; background-color: #fff; border: 1px solid #ffc382; border-radius: 3px; font-family: monospace;"></div>
+                <button id="copy-username-btn" style="margin-top: 5px; padding: 3px 8px; font-size: 12px; background: #ffc382; border: none; border-radius: 3px; cursor: pointer;">העתק שם משתמש</button>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <div style="font-weight: bold; margin-bottom: 5px;">סיסמה:</div>
+                <div id="password-for-copy" style="padding: 8px; background-color: #fff; border: 1px solid #ffc382; border-radius: 3px; font-family: monospace;"></div>
+                <button id="copy-password-btn" style="margin-top: 5px; padding: 3px 8px; font-size: 12px; background: #ffc382; border: none; border-radius: 3px; cursor: pointer;">העתק סיסמה</button>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <button id="stop-recording-btn" style="padding: 8px 15px; background-color: #ff8c00; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">סיים הקלטה ושמור</button>
+            </div>
+        </div>
+        
+        <div style="background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 10px; border-radius: 5px; margin-top: 20px; margin-bottom: 20px; font-size: 14px; text-align: right;">
+            <p style="margin: 0;">
+                <strong>הסבר:</strong> לחיצה על "בדיקת מילוי אוטומטי" תגרום למערכת לנסות למלא את הפרטים בחלון חדש כדי לוודא שהמילוי האוטומטי עובד. זה נועד רק לבדיקת הפונקציה.
+            </p>
+        </div>
+        
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        async function testAutoFill() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const statusDiv = document.getElementById('status');
+            
+            if (!username || !password) {
+                statusDiv.className = 'status error';
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = 'יש למלא שם משתמש וסיסמה לפני הבדיקה';
+                return;
+            }
+            
+            statusDiv.className = 'status info';
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = 'בודק מילוי אוטומטי...';
+            
+            try {
+                const response = await fetch('/api/gateway/test-autofill', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusDiv.className = 'status success';
+                    statusDiv.textContent = 'בדיקת מילוי אוטומטי הצליחה!';
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.textContent = 'בדיקת מילוי אוטומטי נכשלה: ' + result.message;
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = 'שגיאה בבדיקה: ' + error.message;
+            }
+        }
+        
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const autoFill = document.getElementById('auto-fill').checked;
+            const statusDiv = document.getElementById('status');
+            
+            // Show loading status
+            statusDiv.className = 'status info';
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = 'מתחבר...';
+            
+            try {
+                const response = await fetch('/api/gateway/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password,
+                        autoFill: autoFill
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusDiv.className = 'status success';
+                    statusDiv.textContent = result.message;
+                    
+                    // הוספת הערה נוספת
+                    const noteDiv = document.createElement('div');
+                    noteDiv.style.backgroundColor = '#e2f3ff';
+                    noteDiv.style.border = '1px solid #b8daff';
+                    noteDiv.style.color = '#004085';
+                    noteDiv.style.padding = '10px';
+                    noteDiv.style.borderRadius = '5px';
+                    noteDiv.style.marginTop = '10px';
+                    noteDiv.style.fontSize = '14px';
+                    noteDiv.style.textAlign = 'right';
+                    noteDiv.innerHTML = '<strong>חשוב:</strong> אם לא ראית חלון Gateway נפתח, בדוק את מנהל המשימות (Task Manager) כדי לוודא שהתהליך אכן רץ.';
+                    statusDiv.appendChild(noteDiv);
+                    
+                    // Redirect to dashboard after successful login
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 5000); // הארכנו את הזמן ל-5 שניות כדי שהמשתמש יוכל לקרוא את ההודעה
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.textContent = result.message;
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = 'שגיאה בהתחברות: ' + error.message;
+            }
+        });
+        
+        // פונקציה להפעלת Gateway עם הקלטת מאקרו
+        async function startWithMacroRecording() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const statusDiv = document.getElementById('status');
+            const macroDetailsDiv = document.getElementById('macro-details');
+            
+            if (!username || !password) {
+                statusDiv.className = 'status error';
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = 'יש למלא שם משתמש וסיסמה לפני הפעלת הקלטה';
+                return;
+            }
+            
+            // הצגת סטטוס טעינה
+            statusDiv.className = 'status info';
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = 'מפעיל Gateway במצב הקלטת מאקרו...';
+            
+            try {
+                const response = await fetch('/api/gateway/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password,
+                        autoFill: false,
+                        recordMacro: true
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // הצגת תיבת פרטי המאקרו
+                    macroDetailsDiv.style.display = 'block';
+                    
+                    // הצגת הנתונים להעתקה
+                    document.getElementById('username-for-copy').textContent = result.username || username;
+                    document.getElementById('password-for-copy').textContent = result.password || password;
+                    
+                    // הצגת הודעת הצלחה
+                    statusDiv.className = 'status success';
+                    statusDiv.textContent = result.message;
+                    
+                    // הוספת הנחיות נוספות
+                    const instructionsDiv = document.createElement('div');
+                    instructionsDiv.style.backgroundColor = '#fff3cd';
+                    instructionsDiv.style.border = '1px solid #ffeeba';
+                    instructionsDiv.style.color = '#856404';
+                    instructionsDiv.style.padding = '10px';
+                    instructionsDiv.style.borderRadius = '5px';
+                    instructionsDiv.style.marginTop = '10px';
+                    instructionsDiv.style.fontSize = '14px';
+                    instructionsDiv.style.textAlign = 'right';
+                    instructionsDiv.innerHTML = '<strong>הנחיות הקלטה:</strong><ol style="padding-right: 20px; margin: 10px 0;">' + 
+                        '<li>העתק את שם המשתמש והסיסמה מהשדות למעלה (לחץ על כפתורי ההעתקה)</li>' + 
+                        '<li>הדבק אותם בשדות המתאימים בחלון ה-Gateway שנפתח</li>' + 
+                        '<li>השלם את תהליך ההתחברות בחלון ה-Gateway</li>' + 
+                        '<li>לאחר שסיימת, לחץ על "סיים הקלטה ושמור"</li></ol>';
+                    statusDiv.appendChild(instructionsDiv);
+                    
+                    // לא מעביר אוטומטית לדף הבית - המשתמש צריך להשלים את ההקלטה
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.textContent = result.message;
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = 'שגיאה בהפעלת הקלטת מאקרו: ' + error.message;
+            }
+        }
+        
+        // פונקציה לעצירת ההקלטה
+        async function stopMacroRecording() {
+            const statusDiv = document.getElementById('status');
+            const macroDetailsDiv = document.getElementById('macro-details');
+            
+            // הצגת סטטוס טעינה
+            statusDiv.className = 'status info';
+            statusDiv.textContent = 'מסיים הקלטת מאקרו...';
+            
+            try {
+                const response = await fetch('/api/gateway/stop_recording', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // הסתרת תיבת פרטי המאקרו
+                    macroDetailsDiv.style.display = 'none';
+                    
+                    // הצגת הודעת הצלחה
+                    statusDiv.className = 'status success';
+                    statusDiv.textContent = 'הקלטת המאקרו הסתיימה ונשמרה בהצלחה! המערכת תשתמש במאקרו זה בפעמים הבאות.';
+                    
+                    // הוספת הנחיות נוספות
+                    const noteDiv = document.createElement('div');
+                    noteDiv.style.backgroundColor = '#d4edda';
+                    noteDiv.style.border = '1px solid #c3e6cb';
+                    noteDiv.style.color = '#155724';
+                    noteDiv.style.padding = '10px';
+                    noteDiv.style.borderRadius = '5px';
+                    noteDiv.style.marginTop = '10px';
+                    noteDiv.style.fontSize = '14px';
+                    noteDiv.style.textAlign = 'right';
+                    noteDiv.innerHTML = '<strong>מעולה!</strong> בפעם הבאה שתפעיל את Gateway, המערכת תשחזר אוטומטית את כל הפעולות שהקלטת. ' + 
+                        'תועבר לדף הבית בעוד רגע...';
+                    statusDiv.appendChild(noteDiv);
+                    
+                    // מעבר לדף הבית אחרי הצלחה
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 5000);
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.textContent = 'שגיאה בסיום הקלטת מאקרו: ' + result.message;
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = 'שגיאה בסיום הקלטת מאקרו: ' + error.message;
+            }
+        }
+        
+        // פונקציה למחיקת המאקרו
+        async function deleteMacro() {
+            const statusDiv = document.getElementById('status');
+            
+            // הצגת סטטוס טעינה
+            statusDiv.className = 'status info';
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = 'מוחק מאקרו התחברות...';
+            
+            try {
+                const response = await fetch('/api/gateway/delete_macro', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // הצגת הודעת הצלחה
+                    statusDiv.className = 'status success';
+                    statusDiv.textContent = result.message;
+                    
+                    // בדיקה מחדש של סטטוס המאקרו
+                    setTimeout(() => {
+                        checkMacroStatus();
+                    }, 1000);
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.textContent = result.message;
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = 'שגיאה במחיקת המאקרו: ' + error.message;
+            }
+        }
+        
+        // פונקציה לבדיקת המאקרו
+        async function testMacro() {
+            const statusDiv = document.getElementById('status');
+            
+            // הצגת סטטוס טעינה
+            statusDiv.className = 'status info';
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = 'בודק מאקרו התחברות...';
+            
+            try {
+                const response = await fetch('/api/gateway/test_macro', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // הצגת הודעת הצלחה
+                    statusDiv.className = 'status success';
+                    statusDiv.textContent = result.message;
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.textContent = result.message;
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = 'שגיאה בבדיקת המאקרו: ' + error.message;
+            }
+        }
+        
+        // פונקציית עזר להעתקה ללוח
+        function copyToClipboard(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+            } catch (err) {
+                console.error('שגיאה בהעתקה ללוח: ', err);
+            }
+            
+            document.body.removeChild(textArea);
+        }
+        
+        // בדיקת סטטוס מאקרו
+        async function checkMacroStatus() {
+            const macroStatusDiv = document.getElementById('macro-status');
+            const macroIndicator = document.getElementById('macro-indicator');
+            const macroTitle = document.getElementById('macro-title');
+            const macroDescription = document.getElementById('macro-description');
+            const useMacroBtn = document.getElementById('use-macro-btn');
+            
+            try {
+                const response = await fetch('/api/gateway/macro_status');
+                const result = await response.json();
+                
+                // הצג את אזור סטטוס המאקרו
+                macroStatusDiv.style.display = 'block';
+                
+                if (result.success && result.hasRecording) {
+                    // יש מאקרו מוקלט
+                    macroIndicator.style.backgroundColor = '#28a745';  // ירוק
+                    macroTitle.textContent = 'מאקרו התחברות זמין';
+                    macroDescription.innerHTML = 'קיים מאקרו התחברות מוקלט. תוכל להשתמש בכפתור "התחבר עם מאקרו מוקלט" כדי להפעיל אותו.';
+                    
+                    // הפעל את כפתור השימוש במאקרו
+                    useMacroBtn.disabled = false;
+                    useMacroBtn.style.opacity = '1';
+                    useMacroBtn.style.cursor = 'pointer';
+                    
+                    // הצג את כפתורי הפעולות על המאקרו
+                    document.getElementById('macro-actions').style.display = 'block';
+                } else {
+                    // אין מאקרו מוקלט
+                    macroIndicator.style.backgroundColor = '#ffc107';  // צהוב
+                    macroTitle.textContent = 'אין מאקרו התחברות';
+                    macroDescription.innerHTML = 'לא נמצא מאקרו התחברות מוקלט. השתמש בכפתור "הפעל Gateway עם הקלטת מאקרו חדש" כדי ליצור מאקרו.';
+                    
+                    // בטל את כפתור השימוש במאקרו
+                    useMacroBtn.disabled = true;
+                    useMacroBtn.style.opacity = '0.6';
+                    useMacroBtn.style.cursor = 'not-allowed';
+                    
+                    // הסתר את כפתורי הפעולות על המאקרו
+                    document.getElementById('macro-actions').style.display = 'none';
+                }
+            } catch (error) {
+                // שגיאה בבדיקת סטטוס המאקרו
+                macroStatusDiv.style.display = 'block';
+                macroIndicator.style.backgroundColor = '#dc3545';  // אדום
+                macroTitle.textContent = 'שגיאה בבדיקת סטטוס מאקרו';
+                macroDescription.textContent = 'אירעה שגיאה בבדיקת סטטוס המאקרו. נסה לרענן את הדף.';
+                
+                // בטל את כפתור השימוש במאקרו
+                useMacroBtn.disabled = true;
+                useMacroBtn.style.opacity = '0.6';
+                useMacroBtn.style.cursor = 'not-allowed';
+                
+                console.error('שגיאה בבדיקת סטטוס מאקרו:', error);
+            }
+        }
+        
+        // התחברות עם מאקרו מוקלט
+        async function connectWithMacro() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const statusDiv = document.getElementById('status');
+            
+            if (!username || !password) {
+                statusDiv.className = 'status error';
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = 'יש למלא שם משתמש וסיסמה לפני ההתחברות';
+                return;
+            }
+            
+            // הצגת סטטוס טעינה
+            statusDiv.className = 'status info';
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = 'מפעיל Gateway עם מאקרו מוקלט...';
+            
+            try {
+                const response = await fetch('/api/gateway/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password,
+                        autoFill: false,  // ביטול המילוי האוטומטי הרגיל כי אנחנו משתמשים במאקרו
+                        useMacro: true   // סמן שרוצים להשתמש במאקרו
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // הצגת הודעת הצלחה
+                    statusDiv.className = 'status success';
+                    statusDiv.textContent = result.message;
+                    
+                    // הוספת הנחיות נוספות
+                    const noteDiv = document.createElement('div');
+                    noteDiv.style.backgroundColor = '#e2f3ff';
+                    noteDiv.style.border = '1px solid #b8daff';
+                    noteDiv.style.color = '#004085';
+                    noteDiv.style.padding = '10px';
+                    noteDiv.style.borderRadius = '5px';
+                    noteDiv.style.marginTop = '10px';
+                    noteDiv.style.fontSize = '14px';
+                    noteDiv.style.textAlign = 'right';
+                    noteDiv.innerHTML = '<strong>המאקרו פועל!</strong> המערכת משחזרת את פעולות ההתחברות שהקלטת. ' + 
+                        'תועבר לדף הבית בעוד רגע...';
+                    statusDiv.appendChild(noteDiv);
+                    
+                    // מעבר לדף הבית אחרי הצלחה
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 5000);
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.textContent = result.message;
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = 'שגיאה בהפעלת מאקרו: ' + error.message;
+            }
+        }
+        
+        // הפעלת כל מאזיני האירועים
+        document.addEventListener('DOMContentLoaded', function() {
+            // כפתור סיום הקלטה
+            document.getElementById('stop-recording-btn').addEventListener('click', stopMacroRecording);
+            
+            // כפתור התחברות עם מאקרו
+            document.getElementById('use-macro-btn').addEventListener('click', connectWithMacro);
+            
+            // כפתורי העתקה
+            document.getElementById('copy-username-btn').addEventListener('click', function() {
+                copyToClipboard(document.getElementById('username-for-copy').textContent);
+                this.textContent = '✓ הועתק!';
+                setTimeout(() => { this.textContent = 'העתק שם משתמש'; }, 2000);
+            });
+            
+            document.getElementById('copy-password-btn').addEventListener('click', function() {
+                copyToClipboard(document.getElementById('password-for-copy').textContent);
+                this.textContent = '✓ הועתק!';
+                setTimeout(() => { this.textContent = 'העתק סיסמה'; }, 2000);
+            });
+            
+            // בדיקת סטטוס מאקרו בעת טעינת הדף
+            checkMacroStatus();
+        });
+    </script>
+</body>
+</html>

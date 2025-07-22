@@ -1,4 +1,0 @@
-2025-07-10 04:18:25,095 INFO --- Starting New Training Pipeline (Integrated Optimization) ---
-2025-07-10 04:18:25,122 INFO Loaded data from 2010-07-07 00:00:00 to 2025-07-07 00:00:00. Shape: (3773, 8)
-2025-07-10 04:18:25,125 INFO Step 1: Generating features for train and test sets...
-2025-07-10 04:18:25,125 INFO --- [DYNAMIC PARAMS] Attempting to calculate 147 indicators ---

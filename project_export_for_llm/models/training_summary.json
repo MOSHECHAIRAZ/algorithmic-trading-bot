@@ -1,0 +1,175 @@
+{
+    "timestamp": "2025-07-18T08:40:15.658765",
+    "training_run_timestamp": "20250718_083840",
+    "optuna_study_name": "spy_strategy_multi_objective_20250718_083840",
+    "objective_function": "multi_objective",
+    "optuna_scores": [
+        0.6313700804253065,
+        0.9247337461811478
+    ],
+    "test_accuracy": 0.8355437665782494,
+    "classification_report": {
+        "0": {
+            "precision": 0.8733333333333333,
+            "recall": 0.8543478260869565,
+            "f1-score": 0.8637362637362638,
+            "support": 460.0
+        },
+        "1": {
+            "precision": 0.7796052631578947,
+            "recall": 0.8061224489795918,
+            "f1-score": 0.7926421404682275,
+            "support": 294.0
+        },
+        "accuracy": 0.8355437665782494,
+        "macro avg": {
+            "precision": 0.826469298245614,
+            "recall": 0.8302351375332742,
+            "f1-score": 0.8281892021022457,
+            "support": 754.0
+        },
+        "weighted avg": {
+            "precision": 0.836786844432035,
+            "recall": 0.8355437665782494,
+            "f1-score": 0.8360152130190188,
+            "support": 754.0
+        }
+    },
+    "best_params": {
+        "horizon": 9,
+        "threshold": 0.015935908844356163,
+        "top_n_features": 86,
+        "stop_loss_pct": 1.6907318898665635,
+        "take_profit_pct": 8.484406252454818,
+        "risk_per_trade": 0.02036721540138155,
+        "learning_rate": 0.016227066755050833,
+        "n_estimators": 276,
+        "max_depth": 6
+    },
+    "all_params": {
+        "horizon": {
+            "value": 9,
+            "optimized": true
+        },
+        "threshold": {
+            "value": 0.015935908844356163,
+            "optimized": true
+        },
+        "top_n_features": {
+            "value": 86,
+            "optimized": true
+        },
+        "stop_loss_pct": {
+            "value": 1.6907318898665635,
+            "optimized": true
+        },
+        "take_profit_pct": {
+            "value": 8.484406252454818,
+            "optimized": true
+        },
+        "risk_per_trade": {
+            "value": 0.02036721540138155,
+            "optimized": true
+        },
+        "learning_rate": {
+            "value": 0.016227066755050833,
+            "optimized": true
+        },
+        "n_estimators": {
+            "value": 276,
+            "optimized": true
+        },
+        "max_depth": {
+            "value": 6,
+            "optimized": true
+        }
+    },
+    "selected_features_list": [
+        "DPO_20",
+        "BBP_5_2.0",
+        "SMIo_5_20_5",
+        "J_9_3",
+        "BEARP_13",
+        "BOP",
+        "EBSW_40_10",
+        "BULLP_13",
+        "TRIXs_30_9",
+        "BBB_5_2.0",
+        "THERMO_20_2_0.5",
+        "THERMOma_20_2_0.5",
+        "EFI_13",
+        "PVOh_12_26_9",
+        "AR_26",
+        "MOM_10",
+        "KURT_30",
+        "APO_12_26",
+        "RVGIs_14_4",
+        "CFO_9",
+        "UO_7_14_28",
+        "RVI_14",
+        "PGO_14",
+        "PPOh_12_26_9",
+        "CHOP_14_1_100",
+        "BR_26",
+        "STOCHRSId_14_14_3_3",
+        "NATR_14",
+        "volume",
+        "CTI_12",
+        "SLOPE_1",
+        "MAD_30",
+        "MFI_14",
+        "SKEW_30",
+        "QS_10",
+        "MASSI_9_25",
+        "SUPERTl_7_3.0",
+        "PSARs_0.02_0.2",
+        "open_Z_30_1",
+        "MACD_12_26_9",
+        "PVOs_12_26_9",
+        "ADX_14",
+        "PDIST",
+        "CMF_20",
+        "ER_10",
+        "ROC_10",
+        "WILLR_14",
+        "ADOSC_3_10",
+        "vix_close",
+        "PPO_12_26_9",
+        "PPOs_12_26_9",
+        "ICS_26",
+        "ENTP_10",
+        "PSARaf_0.02_0.2",
+        "TRUERANGE_1",
+        "UI_14",
+        "OBV_min_2",
+        "CCI_14_0.015",
+        "KSTs_9",
+        "DMN_14",
+        "AROONOSC_14",
+        "VTXM_14",
+        "OBVe_12",
+        "PVOL",
+        "PVT",
+        "BIAS_SMA_26",
+        "MACDh_12_26_9",
+        "LOGRET_1",
+        "KVO_34_55_13",
+        "VHF_28",
+        "SQZ_20_2.0_20_1.5",
+        "STOCHRSIk_14_14_3_3",
+        "TRIX_30_9",
+        "KVOs_34_55_13",
+        "PVO_12_26_9",
+        "QQE_14_5_4.236",
+        "INERTIA_20_14",
+        "RVGI_14_4",
+        "TSIs_13_25_13",
+        "STDEV_30",
+        "DMP_14",
+        "CG_10",
+        "FISHERTs_9_1",
+        "KST_10_15_20_30_10_10_10_15",
+        "STC_10_12_26_0.5",
+        "HILOs_13_21"
+    ]
+}

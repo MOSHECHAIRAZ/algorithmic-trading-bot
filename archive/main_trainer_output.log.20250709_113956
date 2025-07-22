@@ -1,9 +1,0 @@
-2025-07-09 11:34:46,058 INFO --- Starting New Training Pipeline (Bias Corrected) ---
-2025-07-09 11:34:46,118 INFO Loaded data from 2010-07-07 00:00:00 to 2025-07-07 00:00:00. Shape: (3773, 8)
-2025-07-09 11:34:46,118 INFO Step 1: Generating all features on the full dataset...
-2025-07-09 11:36:20,316 ERROR Pandas-ta strategy 'All' failed: [Errno 22] Invalid argument
-2025-07-09 11:36:20,505 INFO Total features calculated: 13
-2025-07-09 11:36:20,519 INFO Data split into Train: 3018 rows, Test: 755 rows.
-2025-07-09 11:36:20,520 INFO Step 2: Selecting top 40 features...
-2025-07-09 11:36:27,266 INFO Selected 13 features.
-2025-07-09 11:36:27,267 INFO Step 3: Running Optuna hyperparameter optimization...

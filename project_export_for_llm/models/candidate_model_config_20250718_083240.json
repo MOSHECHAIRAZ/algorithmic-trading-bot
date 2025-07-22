@@ -1,0 +1,60 @@
+{
+  "training_run_timestamp": "20250718_083240",
+  "optuna_study_name": "spy_strategy_multi_objective_20250718_083240",
+  "selected_features": [
+    "DPO_20",
+    "SMIo_5_20_5",
+    "CFO_9",
+    "CHOP_14_1_100",
+    "BBB_5_2.0",
+    "AR_26",
+    "EBSW_40_10",
+    "BBP_5_2.0",
+    "TRIX_30_9",
+    "SKEW_30",
+    "NATR_14",
+    "CMF_20",
+    "BOP",
+    "PVOh_12_26_9",
+    "J_9_3",
+    "UO_7_14_28",
+    "QS_10",
+    "EFI_13",
+    "vix_close",
+    "ADOSC_3_10",
+    "BEARP_13",
+    "LOGRET_1",
+    "PSARs_0.02_0.2",
+    "CG_10",
+    "PPOh_12_26_9",
+    "RVGIs_14_4",
+    "ADX_14",
+    "BR_26",
+    "VHF_28",
+    "KURT_30"
+  ],
+  "params": {
+    "horizon": 10,
+    "threshold": 0.021971086451254323,
+    "top_n_features": 30,
+    "stop_loss_pct": 1.1573573071378713,
+    "take_profit_pct": 8.925059336717057,
+    "risk_per_trade": 0.04592622018187082,
+    "learning_rate": 0.02738520573219932,
+    "n_estimators": 260,
+    "max_depth": 6
+  },
+  "scaler": true,
+  "risk_params": {
+    "stop_loss_pct": 1.1573573071378713,
+    "take_profit_pct": 8.925059336717057,
+    "risk_per_trade": 0.04592622018187082
+  },
+  "contract": {
+    "symbol": "SPY",
+    "secType": "STK",
+    "exchange": "SMART",
+    "currency": "USD",
+    "primaryExch": "ARCA"
+  }
+}
